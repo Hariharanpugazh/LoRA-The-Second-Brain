@@ -3,7 +3,6 @@
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { type CoreMessage } from "ai";
-import { BsNvidia } from "react-icons/bs";
 import ChatInput from "./chat-input";
 import { readStreamableValue } from "ai/rsc";
 import { FaUser } from "react-icons/fa6";
@@ -14,14 +13,15 @@ import remarkGfm from "remark-gfm";
 import { MemoizedReactMarkdown } from "./markdown";
 import { useUser } from "./user-context";
 import { DatabaseService, Conversation } from "@/lib/database";
-import { Button } from "./ui/button";
-import { MessageSquare, History } from "lucide-react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPlus } from "@fortawesome/free-solid-svg-icons";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { useConversations, useCreateConversation, useUpdateConversation } from "@/lib/database-hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { useConversation } from "./conversation-context";
 import { useModel } from "./app-content";
+import { Pin, MoreVertical } from "lucide-react";
+import { Button } from "./ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
+import { EncryptedConversationStorage } from "@/lib/encrypted-conversation-storage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -31,6 +31,8 @@ export default function Chat() {
   const { currentConversationId, setCurrentConversationId } = useConversation();
   const { currentModel, onModelChange } = useModel();
   const { data: conversations = [], isLoading: isLoadingConversations } = useConversations(currentUser?.id || '');
+  const queryClient = useQueryClient();
+  const router = useRouter();
   const createConversationMutation = useCreateConversation();
   const updateConversationMutation = useUpdateConversation();
   const [messages, setMessages] = useState<CoreMessage[]>([]);
@@ -46,9 +48,11 @@ export default function Chat() {
 
   // Load conversation when currentConversationId changes
   useEffect(() => {
+    console.log('currentConversationId changed:', currentConversationId, 'messages length:', messages.length);
     if (currentConversationId) {
       loadConversation(currentConversationId);
     } else {
+      console.log('Clearing messages for new chat');
       setMessages([]);
     }
   }, [currentConversationId]);
@@ -62,12 +66,32 @@ export default function Chat() {
     try {
       const conversation = await DatabaseService.getConversationById(conversationId);
       if (conversation) {
-        setMessages(conversation.messages);
-        onModelChange(conversation.model);
+        // If conversation has encrypted data, try to load the decrypted messages
+        if (conversation.encryptedPath && currentUser?.password) {
+          try {
+            const decryptedConversation = await EncryptedConversationStorage.loadConversation(
+              conversation.encryptedPath,
+              currentUser.password
+            );
+            setMessages(decryptedConversation.messages || []);
+            onModelChange(decryptedConversation.model || '');
+          } catch (error) {
+            console.error('Failed to decrypt conversation:', error);
+            // Fallback to unencrypted messages if available
+            setMessages(conversation.messages || []);
+            onModelChange(conversation.model || '');
+            toast.error('Failed to load encrypted conversation - using unencrypted data');
+          }
+        } else {
+          // Use unencrypted conversation data
+          setMessages(conversation.messages || []);
+          onModelChange(conversation.model || '');
+        }
       }
     } catch (error) {
       console.error('Error loading conversation:', error);
       toast.error('Failed to load conversation');
+      setMessages([]);
     }
   };
 
@@ -75,7 +99,7 @@ export default function Chat() {
     if (!currentUser) return;
 
     try {
-      const title = messages.length > 0
+      const title = messages.length > 0 && messages[0].content
         ? ((messages[0].content as string).length > 50
             ? (messages[0].content as string).slice(0, 50) + '...'
             : (messages[0].content as string))
@@ -85,22 +109,54 @@ export default function Chat() {
         // Update existing conversation
         await updateConversationMutation.mutateAsync({
           id: currentConversationId,
-          updates: { messages, model, title }
+          updates: { messages, model, title },
+          password: currentUser.password // Use user's password for encryption
         });
       } else {
         // Create new conversation
+        console.log('Creating new conversation with:', { userId: currentUser.id, title, messages: messages.length, model });
         const newConversation = await createConversationMutation.mutateAsync({
           userId: currentUser.id,
           title,
           messages,
-          model
+          model,
+          password: currentUser.password // Use user's password for encryption
         });
+        console.log('New conversation created:', newConversation);
         if (newConversation) {
           setCurrentConversationId(newConversation.id);
+          // Update URL with new conversation
+          router.push(`/?conversation=${newConversation.id}`, { scroll: false });
+          // Force refetch of conversations to update sidebar immediately
+          queryClient.invalidateQueries({ queryKey: ['conversations', currentUser.id] });
         }
       }
     } catch (error) {
       console.error('Error saving conversation:', error);
+      toast.error('Failed to save conversation');
+    }
+  };
+
+  const handleTogglePin = async () => {
+    if (!currentConversationId || !currentUser) return;
+
+    try {
+      // Get the current conversation to check its pinned status
+      const conversation = await DatabaseService.getConversationById(currentConversationId);
+      if (!conversation) return;
+
+      const newPinnedState = !conversation.pinned;
+
+      await updateConversationMutation.mutateAsync({
+        id: currentConversationId,
+        updates: { pinned: newPinnedState },
+        password: currentUser.password
+      });
+
+      toast.success(newPinnedState ? "Pinned conversation" : "Unpinned conversation");
+    } catch (error) {
+      console.error('Error updating conversation pin status:', error);
+      toast.error("Failed to update conversation");
     }
   };
 
@@ -142,7 +198,7 @@ export default function Chat() {
         ]);
       }
 
-      // Save conversation after the response is complete
+      // Save conversation with the complete messages
       const finalMessages: CoreMessage[] = [
         ...newMessages,
         { role: "assistant", content: assistantMessage }
@@ -161,35 +217,6 @@ export default function Chat() {
   if (messages.length === 0) {
     return (
       <div className="stretch mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center px-4 pb-[8rem] pt-[6rem] md:px-0 md:pt-[4rem] xl:pt-[2rem] relative">
-        {/* Conversation Controls */}
-        {currentUser && (
-          <div className="absolute top-4 left-4 right-4 flex items-center justify-between"> 
-            {conversations.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="flex items-center gap-2">
-                    <History className="w-4 h-4" />
-                    History ({conversations.length})
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  {conversations.map((conv) => (
-                    <DropdownMenuItem
-                      key={conv.id}
-                      onClick={() => loadConversation(conv.id)}
-                      className="flex flex-col items-start p-3"
-                    >
-                      <div className="font-medium truncate w-full">{conv.title}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(conv.updatedAt).toLocaleDateString()} • {conv.model}
-                      </div>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-        )}
 
         <h1 className="text-center text-5xl font-medium tracking-tighter">
           LoRA: The Second Brain
@@ -232,33 +259,27 @@ export default function Chat() {
 
   return (
     <div className="stretch mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 pb-[8rem] pt-24 md:px-0 relative">
-      {/* Conversation Controls */}
-      {currentUser && (
-        <div className="absolute top-4 left-4 right-4 flex items-center justify-end">
-          {conversations.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="flex items-center gap-2">
-                  <History className="w-4 h-4" />
-                  History ({conversations.length})
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
-                {conversations.map((conv) => (
-                  <DropdownMenuItem
-                    key={conv.id}
-                    onClick={() => loadConversation(conv.id)}
-                    className="flex flex-col items-start p-3"
-                  >
-                    <div className="font-medium truncate w-full">{conv.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(conv.updatedAt).toLocaleDateString()} • {conv.model}
-                    </div>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+      {/* Conversation Header */}
+      {currentConversationId && (
+        <div className="flex items-center justify-between mb-4 pb-2 border-b">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-medium">
+              {conversations.find(c => c.id === currentConversationId)?.title || 'Conversation'}
+            </h2>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleTogglePin}>
+                <Pin className="h-4 w-4 mr-2" />
+                Pin Conversation
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
 

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { ReactNode, useState, createContext, useContext } from "react";
+import React, { ReactNode, useState, createContext, useContext, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Nav from "@/components/nav";
 import { Toaster } from "@/components/ui/sonner";
 import { Analytics } from "@vercel/analytics/react";
@@ -9,6 +10,12 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Login } from "@/components/login";
 import { useUser } from "@/components/user-context";
 import { ConversationProvider, useConversation } from "@/components/conversation-context";
+import { SeeAllChatsDialog } from "@/components/dialogs/see-all-chats-dialog";
+import { SeeAllFilesDialog } from "@/components/dialogs/see-all-files-dialog";
+import { SeeAllProjectsDialog } from "@/components/dialogs/see-all-projects-dialog";
+import { DatabaseService } from "@/lib/database";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 // Create a context for model state
 const ModelContext = createContext<{
@@ -26,8 +33,11 @@ interface AppContentProps {
 }
 
 function AppContentInner({ children }: AppContentProps) {
-  const { isAuthenticated, isLoading } = useUser();
+  const { isAuthenticated, isLoading, currentUser } = useUser();
   const { currentConversationId, setCurrentConversationId } = useConversation();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const [currentModel, setCurrentModel] = useState(() => {
     // Initialize from localStorage if available
     if (typeof window !== 'undefined') {
@@ -37,13 +47,21 @@ function AppContentInner({ children }: AppContentProps) {
     return '';
   });
 
+  // Dialog states
+  const [chatsDialogOpen, setChatsDialogOpen] = useState(false);
+  const [chatsDialogType, setChatsDialogType] = useState<'pinned' | 'recent'>('recent');
+  const [filesDialogOpen, setFilesDialogOpen] = useState(false);
+  const [projectsDialogOpen, setProjectsDialogOpen] = useState(false);
+
   // Initialize sidebar state from cookie
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
+  const [sidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
-      const cookie = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('sidebar_state='));
-      return cookie ? cookie.split('=')[1] === 'true' : true; // Default to true if no cookie
+      const cookies = document.cookie.split('; ');
+      const sidebarCookie = cookies.find(row => row.startsWith('sidebar_state='));
+      if (sidebarCookie) {
+        const value = sidebarCookie.split('=')[1];
+        return value === 'true';
+      }
     }
     return true;
   });
@@ -53,11 +71,37 @@ function AppContentInner({ children }: AppContentProps) {
   };
 
   const handleNewChat = () => {
+    console.log('handleNewChat called');
     setCurrentConversationId(null);
+    // Update URL to remove conversation parameter
+    router.push('/', { scroll: false });
   };
 
   const handleSelectConversation = (conversationId: string) => {
     setCurrentConversationId(conversationId);
+    // Update URL with conversation parameter
+    router.push(`/?conversation=${conversationId}`, { scroll: false });
+  };
+
+  const handleSeeAllChats = (type: 'pinned' | 'recent') => {
+    setChatsDialogType(type);
+    setChatsDialogOpen(true);
+  };
+
+  const handleSeeAllFiles = () => {
+    setFilesDialogOpen(true);
+  };
+
+  const handleCreateFolder = () => {
+    setFilesDialogOpen(true);
+  };
+
+  const handleSeeAllProjects = () => {
+    setProjectsDialogOpen(true);
+  };
+
+  const handleCreateProject = () => {
+    setProjectsDialogOpen(true);
   };
 
   const handleModelChange = (model: string) => {
@@ -86,11 +130,16 @@ function AppContentInner({ children }: AppContentProps) {
 
   return (
     <ModelContext.Provider value={{ currentModel, onModelChange: handleModelChange }}>
-      <SidebarProvider defaultOpen={sidebarOpen} onOpenChange={setSidebarOpen}>
+      <SidebarProvider defaultOpen={sidebarOpen}>
         <AppSidebar
           onNewChat={handleNewChat}
           onSelectConversation={handleSelectConversation}
           currentConversationId={currentConversationId}
+          onSeeAllChats={handleSeeAllChats}
+          onSeeAllFiles={handleSeeAllFiles}
+          onCreateFolder={handleCreateFolder}
+          onSeeAllProjects={handleSeeAllProjects}
+          onCreateProject={handleCreateProject}
         />
         <SidebarInset>
           <Nav />
@@ -99,6 +148,22 @@ function AppContentInner({ children }: AppContentProps) {
           <Analytics />
         </SidebarInset>
       </SidebarProvider>
+
+      {/* Dialogs */}
+      <SeeAllChatsDialog
+        open={chatsDialogOpen}
+        onOpenChange={setChatsDialogOpen}
+        type={chatsDialogType}
+        onSelectConversation={handleSelectConversation}
+      />
+      <SeeAllFilesDialog
+        open={filesDialogOpen}
+        onOpenChange={setFilesDialogOpen}
+      />
+      <SeeAllProjectsDialog
+        open={projectsDialogOpen}
+        onOpenChange={setProjectsDialogOpen}
+      />
     </ModelContext.Provider>
   );
 }

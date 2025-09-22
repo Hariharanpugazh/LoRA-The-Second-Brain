@@ -28,6 +28,7 @@ import {
   LogOut,
   Globe
 } from "lucide-react";
+import { useExportConversationsForKnowledgeBase } from "@/lib/database-hooks";
 import { memoryPresets, LoRAConfig, defaultConfig } from "@/lib/config";
 import { toast } from "sonner";
 
@@ -50,6 +51,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [config, setConfig] = useState<LoRAConfig>(defaultConfig);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSection>('preferences');
+  const exportConversationsMutation = useExportConversationsForKnowledgeBase();
   const { currentUser, users, logout } = useUser();
 
   // Load saved config on mount
@@ -602,19 +604,54 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <BookOpen className="w-5 h-5" />
-                  Knowledge Base
+                  Knowledge Base Management
                 </CardTitle>
                 <CardDescription>
-                  Manage your knowledge base and learning preferences
+                  Export your conversations for use as knowledge base training data
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="text-center py-8">
-                  <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium mb-2">Knowledge Base Coming Soon</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Advanced knowledge management and learning features will be available in a future update.
-                  </p>
+                <div className="space-y-4">
+                  <div className="p-4 border rounded-lg">
+                    <h3 className="font-medium mb-2">Export Conversations</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Export all your conversations in JSON format. This data can be used to train or fine-tune your LoRA models to better understand your communication patterns and preferences.
+                    </p>
+                    <Button
+                      onClick={() => {
+                        if (currentUser?.id) {
+                          exportConversationsMutation.mutate(currentUser.id);
+                        }
+                      }}
+                      disabled={exportConversationsMutation.isPending}
+                      className="w-full"
+                    >
+                      {exportConversationsMutation.isPending ? 'Exporting...' : 'Export Knowledge Base'}
+                    </Button>
+                  </div>
+
+                  <div className="p-4 border rounded-lg">
+                    <h3 className="font-medium mb-2">What gets exported?</h3>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• All conversation messages and metadata</li>
+                      <li>• Model information used for each conversation</li>
+                      <li>• Timestamps and conversation structure</li>
+                      <li>• Pinned status and user information</li>
+                    </ul>
+                  </div>
+
+                  <div className="p-4 border rounded-lg">
+                    <h3 className="font-medium mb-2">How to use the exported data?</h3>
+                    <p className="text-sm text-muted-foreground">
+                      The exported JSON file contains structured conversation data that can be used for:
+                    </p>
+                    <ul className="text-sm text-muted-foreground space-y-1 mt-2">
+                      <li>• Fine-tuning language models on your communication style</li>
+                      <li>• Creating personalized AI assistants</li>
+                      <li>• Building knowledge graphs from your conversations</li>
+                      <li>• Training custom LoRA adapters</li>
+                    </ul>
+                  </div>
                 </div>
               </CardContent>
             </Card>

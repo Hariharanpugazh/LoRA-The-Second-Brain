@@ -24,7 +24,8 @@ export function TeamSwitcher({
   const [activeTeam, setActiveTeam] = React.useState(teams[0]);
 
   const handleClick = () => {
-    router.push("/");
+    // Don't navigate, just show it's clickable
+    console.log('Team switcher clicked');
   };
 
   return (

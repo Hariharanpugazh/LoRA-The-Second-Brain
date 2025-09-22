@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { DatabaseService, User, Conversation } from "@/lib/database";
+import { DatabaseService, User, Conversation, FileItem, Project } from "@/lib/database";
 
 // Query keys
 export const queryKeys = {
@@ -7,6 +7,8 @@ export const queryKeys = {
   user: (id: string) => ['users', id] as const,
   conversations: (userId: string) => ['conversations', userId] as const,
   conversation: (id: string) => ['conversations', 'detail', id] as const,
+  files: (userId: string) => ['files', userId] as const,
+  projects: (userId: string) => ['projects', userId] as const,
 };
 
 // User hooks
@@ -88,15 +90,22 @@ export function useCreateConversation() {
       userId,
       title,
       messages,
-      model
+      model,
+      pinned = false,
+      password
     }: {
       userId: string;
       title: string;
       messages: any[];
       model: string;
-    }) => DatabaseService.createConversation(userId, title, messages, model),
-    onSuccess: (_, { userId }) => {
+      pinned?: boolean;
+      password?: string;
+    }) => DatabaseService.createConversation(userId, title, messages, model, pinned, password),
+    onSuccess: (newConversation, { userId }) => {
+      // Invalidate and refetch conversations for this user
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations(userId) });
+      // Also invalidate all conversations to be safe
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
   });
 }
@@ -107,18 +116,16 @@ export function useUpdateConversation() {
   return useMutation({
     mutationFn: ({
       id,
-      updates
+      updates,
+      password
     }: {
       id: string;
-      updates: Partial<Conversation>
-    }) => DatabaseService.updateConversation(id, updates),
-    onSuccess: (_, { id }) => {
-      // Find the conversation to get userId for invalidation
-      const conversation = queryClient.getQueryData<Conversation>(queryKeys.conversation(id));
-      if (conversation) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.conversations(conversation.userId) });
-        queryClient.invalidateQueries({ queryKey: queryKeys.conversation(id) });
-      }
+      updates: Partial<Conversation>;
+      password?: string;
+    }) => DatabaseService.updateConversation(id, updates, password),
+    onSuccess: () => {
+      // Invalidate all conversation queries to ensure UI updates
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
   });
 }
@@ -127,10 +134,165 @@ export function useDeleteConversation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => DatabaseService.deleteConversation(id),
+    mutationFn: ({ id, password }: { id: string; password?: string }) => DatabaseService.deleteConversation(id, password),
     onSuccess: () => {
       // Invalidate all conversation queries since we don't know the userId
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+  });
+}
+
+// File hooks
+export function useFiles(userId: string) {
+  return useQuery({
+    queryKey: queryKeys.files(userId),
+    queryFn: () => DatabaseService.getFilesByUserId(userId),
+    enabled: !!userId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+}
+
+export function useCreateFile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      userId,
+      name,
+      type,
+      path,
+      size,
+      parentId,
+      fileBuffer,
+      password
+    }: {
+      userId: string;
+      name: string;
+      type: 'document' | 'image' | 'folder';
+      path: string;
+      size?: number;
+      parentId?: string;
+      fileBuffer?: ArrayBuffer;
+      password?: string;
+    }) => DatabaseService.createFile(userId, name, type, path, size, parentId, fileBuffer, password),
+    onSuccess: (_, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.files(userId) });
+    },
+  });
+}
+
+export function useUpdateFile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      updates
+    }: {
+      id: string;
+      updates: Partial<FileItem>
+    }) => DatabaseService.updateFile(id, updates),
+    onSuccess: () => {
+      // Invalidate all file queries since we don't know the userId
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+    },
+  });
+}
+
+export function useLoadFileContent() {
+  return useMutation({
+    mutationFn: ({
+      fileId,
+      password
+    }: {
+      fileId: string;
+      password: string;
+    }) => DatabaseService.loadFileContent(fileId, password),
+  });
+}
+
+export function useDeleteFile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => DatabaseService.deleteFile(id),
+    onSuccess: () => {
+      // Invalidate all file queries since we don't know the userId
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+    },
+  });
+}
+
+// Project hooks
+export function useProjects(userId: string) {
+  return useQuery({
+    queryKey: queryKeys.projects(userId),
+    queryFn: () => DatabaseService.getProjectsByUserId(userId),
+    enabled: !!userId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+}
+
+export function useCreateProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      userId,
+      name,
+      description,
+      category,
+      color,
+      password
+    }: {
+      userId: string;
+      name: string;
+      description: string;
+      category: string;
+      color?: string;
+      password?: string;
+    }) => DatabaseService.createProject(userId, name, description, category, color, password),
+    onSuccess: (_, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects(userId) });
+    },
+  });
+}
+
+export function useUpdateProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      updates
+    }: {
+      id: string;
+      updates: Partial<Project>
+    }) => DatabaseService.updateProject(id, updates),
+    onSuccess: () => {
+      // Invalidate all project queries since we don't know the userId
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+}
+
+export function useExportConversationsForKnowledgeBase() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, password }: { userId: string; password?: string }) =>
+      DatabaseService.exportConversationsForKnowledgeBase(userId, password),
+    onSuccess: (data) => {
+      // Create and download the file
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lora-knowledge-base-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     },
   });
 }

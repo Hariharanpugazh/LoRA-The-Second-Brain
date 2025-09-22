@@ -46,12 +46,22 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onNewChat?: () => void;
   onSelectConversation?: (conversationId: string) => void;
   currentConversationId?: string | null;
+  onSeeAllChats?: (type: 'pinned' | 'recent') => void;
+  onSeeAllFiles?: () => void;
+  onCreateFolder?: () => void;
+  onSeeAllProjects?: () => void;
+  onCreateProject?: () => void;
 }
 
 export function AppSidebar({
   onNewChat = () => {},
   onSelectConversation = () => {},
   currentConversationId = null,
+  onSeeAllChats = () => {},
+  onSeeAllFiles = () => {},
+  onCreateFolder = () => {},
+  onSeeAllProjects = () => {},
+  onCreateProject = () => {},
   ...props
 }: AppSidebarProps) {
   return (
@@ -67,21 +77,29 @@ export function AppSidebar({
         <SidebarNewChat onNewChat={onNewChat} />
 
         {/* Files */}
-        <SidebarFiles />
+        <SidebarFiles
+          onSeeAll={onSeeAllFiles}
+          onCreateFolder={onCreateFolder}
+        />
 
         {/* Projects */}
-        <SidebarProjects />
+        <SidebarProjects
+          onSeeAll={onSeeAllProjects}
+          onCreateProject={onCreateProject}
+        />
 
         {/* Pinned Chats */}
         <SidebarPinnedChats
           onSelectConversation={onSelectConversation}
           currentConversationId={currentConversationId}
+          onSeeAll={onSeeAllChats}
         />
 
         {/* Recent Chats */}
         <SidebarRecentChats
           onSelectConversation={onSelectConversation}
           currentConversationId={currentConversationId}
+          onSeeAll={onSeeAllChats}
         />
       </SidebarContent>
       <SidebarFooter>
