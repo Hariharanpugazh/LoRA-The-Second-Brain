@@ -620,7 +620,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <Button
                       onClick={() => {
                         if (currentUser?.id) {
-                          exportConversationsMutation.mutate(currentUser.id);
+                          exportConversationsMutation.mutate({ userId: currentUser.id, password: currentUser.password });
                         }
                       }}
                       disabled={exportConversationsMutation.isPending}

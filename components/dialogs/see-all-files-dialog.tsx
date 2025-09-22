@@ -45,18 +45,24 @@ export function SeeAllFilesDialog({ open, onOpenChange }: SeeAllFilesDialogProps
   const handleCreateFolder = async () => {
     if (!folderName.trim() || !currentUser) return;
 
+    console.log('Creating folder:', folderName.trim(), 'in folder:', currentFolderId);
+
     try {
-      await createFileMutation.mutateAsync({
+      const result = await createFileMutation.mutateAsync({
         userId: currentUser.id,
         name: folderName.trim(),
         type: 'folder',
         path: `${currentFolderId ? files.find(f => f.id === currentFolderId)?.path : ''}/${folderName.trim()}`,
         parentId: currentFolderId || undefined
       });
+
+      console.log('Folder created result:', result);
+
       setFolderName("");
       setShowCreateFolder(false);
       toast.success("Folder created successfully");
     } catch (error) {
+      console.error('Error creating folder:', error);
       toast.error("Failed to create folder");
     }
   };
@@ -93,9 +99,12 @@ export function SeeAllFilesDialog({ open, onOpenChange }: SeeAllFilesDialogProps
     const file = event.target.files?.[0];
     if (!file || !currentUser) return;
 
+    console.log('Uploading file:', file.name, 'size:', file.size);
+
     try {
       // Read file as ArrayBuffer
       const fileBuffer = await file.arrayBuffer();
+      console.log('File buffer size:', fileBuffer.byteLength);
 
       // For now, just create a file entry
       // In a real implementation, you'd upload the file to storage
@@ -111,14 +120,17 @@ export function SeeAllFilesDialog({ open, onOpenChange }: SeeAllFilesDialogProps
         fileBuffer: fileBuffer,
         password: currentUser.password // Use user's password for encryption
       }, {
-        onSuccess: () => {
+        onSuccess: (result) => {
+          console.log('File upload result:', result);
           toast.success("File uploaded and encrypted successfully");
         },
-        onError: () => {
+        onError: (error) => {
+          console.error('File upload error:', error);
           toast.error("Failed to upload and encrypt file");
         }
       });
     } catch (error) {
+      console.error('File read error:', error);
       toast.error("Failed to read file");
     }
   };
@@ -234,26 +246,26 @@ export function SeeAllFilesDialog({ open, onOpenChange }: SeeAllFilesDialogProps
                   className={`hover:shadow-md transition-shadow ${file.type === 'folder' ? 'cursor-pointer' : 'cursor-default'} relative group`}
                 >
                   <CardContent className="p-4 text-center">
-                    <div className="flex justify-center mb-2">
+                    <div className="flex justify-center mb-2 relative">
                       {getFileIcon(file.type)}
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                              <MoreVertical className="h-3 w-3" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => handleDeleteFile(file.id, file.name)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                    </div>
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                            <MoreVertical className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteFile(file.id, file.name)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                     <p className="font-medium text-sm truncate">{file.name}</p>
                     {file.size && (
@@ -266,6 +278,7 @@ export function SeeAllFilesDialog({ open, onOpenChange }: SeeAllFilesDialogProps
                   {file.type === 'folder' && (
                     <div
                       className="absolute inset-0 cursor-pointer"
+                      style={{ top: '2rem', right: '2rem', bottom: 0, left: 0 }}
                       onClick={() => handleFolderClick(file)}
                     />
                   )}

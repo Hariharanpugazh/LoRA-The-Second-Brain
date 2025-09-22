@@ -66,7 +66,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   return (
     <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader>
+      <SidebarHeader className="flex flex-row items-center gap-0 pt-4 pb-2 px-2">
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
