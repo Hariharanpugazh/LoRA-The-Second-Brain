@@ -1,0 +1,776 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useUser } from "@/components/user-context";
+import {
+  AlertCircle,
+  Cpu,
+  HardDrive,
+  Zap,
+  Settings,
+  Save,
+  RotateCcw,
+  User,
+  Sliders,
+  BookOpen,
+  Info,
+  X,
+  LogOut,
+  Globe
+} from "lucide-react";
+import { memoryPresets, LoRAConfig, defaultConfig } from "@/lib/config";
+import { toast } from "sonner";
+
+type SettingsSection = 'account' | 'preferences' | 'environment' | 'knowledge' | 'about';
+
+const sections = [
+  { id: 'account' as const, label: 'My Account', icon: User },
+  { id: 'preferences' as const, label: 'Preferences', icon: Sliders },
+  { id: 'environment' as const, label: 'Environment', icon: Globe },
+  { id: 'knowledge' as const, label: 'Knowledge', icon: BookOpen },
+  { id: 'about' as const, label: 'About', icon: Info },
+];
+
+interface SettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+  const [config, setConfig] = useState<LoRAConfig>(defaultConfig);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [activeSection, setActiveSection] = useState<SettingsSection>('preferences');
+  const { currentUser, users, logout } = useUser();
+
+  // Load saved config on mount
+  useEffect(() => {
+    const savedConfig = localStorage.getItem('lora_config');
+    if (savedConfig) {
+      try {
+        const parsed = JSON.parse(savedConfig);
+        setConfig({ ...defaultConfig, ...parsed });
+      } catch (error) {
+        console.error('Error loading config:', error);
+      }
+    }
+  }, []);
+
+  // Track changes
+  useEffect(() => {
+    setHasUnsavedChanges(true);
+  }, [config]);
+
+  const updateConfig = (updates: Partial<LoRAConfig>) => {
+    setConfig(prev => ({ ...prev, ...updates }));
+  };
+
+  const saveConfig = () => {
+    localStorage.setItem('lora_config', JSON.stringify(config));
+    setHasUnsavedChanges(false);
+    toast.success('Settings saved successfully');
+  };
+
+  const resetToDefault = () => {
+    setConfig(defaultConfig);
+    toast.info('Reset to default settings');
+  };
+
+  const applyPreset = (presetKey: keyof typeof memoryPresets) => {
+    const preset = memoryPresets[presetKey];
+    setConfig(prev => ({ ...prev, ...preset }));
+  };
+
+  const getMemoryUsageColor = (memoryMB: number) => {
+    if (memoryMB <= 2048) return "text-green-600 bg-green-50 dark:bg-green-950";
+    if (memoryMB <= 4096) return "text-yellow-600 bg-yellow-50 dark:bg-yellow-950";
+    if (memoryMB <= 8192) return "text-orange-600 bg-orange-50 dark:bg-orange-950";
+    return "text-red-600 bg-red-50 dark:bg-red-950";
+  };
+
+  const getPerformanceRating = (config: LoRAConfig) => {
+    let score = 0;
+    if (config.enableGPU) score += 30;
+    if (config.threads > 4) score += 20;
+    if (config.memoryLimit >= 8192) score += 25;
+    if (config.contextWindow >= 4096) score += 15;
+    if (config.quantization === 'Q8_0') score += 10;
+
+    if (score >= 80) return { label: "High Performance", color: "bg-green-500" };
+    if (score >= 60) return { label: "Balanced", color: "bg-yellow-500" };
+    if (score >= 40) return { label: "Low Power", color: "bg-blue-500" };
+    return { label: "Ultra Low Power", color: "bg-gray-500" };
+  };
+
+  const performance = getPerformanceRating(config);
+
+  const renderSectionContent = () => {
+    switch (activeSection) {
+      case 'account':
+        return (
+          <div className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-3">
+              {/* Profile Card */}
+              <Card className="md:col-span-1">
+                <CardHeader className="text-center">
+                  <div className="mx-auto mb-4">
+                    <Avatar className="w-20 h-20 mx-auto">
+                      <AvatarImage src="/avatars/user.jpg" alt={currentUser?.name || 'User'} />
+                      <AvatarFallback className="text-xl bg-primary/10 text-primary font-semibold">
+                        {currentUser?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
+                  <CardTitle className="text-lg">{currentUser?.name || 'User'}</CardTitle>
+                  <CardDescription>LoRA User</CardDescription>
+                  <div className="flex justify-center gap-2 mt-2">
+                    <Badge variant="secondary">Free Plan</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-sm text-muted-foreground">
+                    <p>Total Users: {users?.length || 0}</p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      logout?.();
+                      onClose();
+                    }}
+                    variant="outline"
+                    className="w-full"
+                    size="sm"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Profile Details */}
+              <div className="md:col-span-2 space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <User className="w-5 h-5" />
+                      Profile Information
+                    </CardTitle>
+                    <CardDescription>
+                      Your account details and preferences
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Full Name
+                        </label>
+                        <p className="text-sm font-medium">{currentUser?.name || 'User'}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Email
+                        </label>
+                        <p className="text-sm font-medium">user@lora.ai</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Account Type
+                        </label>
+                        <p className="text-sm font-medium">Personal</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Member Since
+                        </label>
+                        <p className="text-sm font-medium">
+                          {currentUser?.createdAt ? new Date(currentUser.createdAt).toLocaleDateString() : 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {(users?.length || 0) > 1 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <User className="w-5 h-5" />
+                        All Users ({users?.length || 0})
+                      </CardTitle>
+                      <CardDescription>
+                        Switch between your accounts
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {users?.map((user) => (
+                          <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="w-8 h-8">
+                                <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                                  {user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="text-sm font-medium">{user.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Created {new Date(user.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                            {user.id === currentUser?.id && (
+                              <Badge variant="secondary" className="text-xs">Current</Badge>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings className="w-5 h-5" />
+                      Account Settings
+                    </CardTitle>
+                    <CardDescription>
+                      Manage your account preferences
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Email Notifications</p>
+                        <p className="text-xs text-muted-foreground">
+                          Receive updates about your account
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        Configure
+                      </Button>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Data Privacy</p>
+                        <p className="text-xs text-muted-foreground">
+                          Manage your data and privacy settings
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        Manage
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Usage Statistics</CardTitle>
+                    <CardDescription>
+                      Your LoRA usage overview
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-primary">0</p>
+                        <p className="text-xs text-muted-foreground">AI Conversations</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-primary">0</p>
+                        <p className="text-xs text-muted-foreground">Documents Processed</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-primary">0</p>
+                        <p className="text-xs text-muted-foreground">Models Used</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'preferences':
+        return (
+          <div className="space-y-6">
+            {/* Quick Presets */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="w-5 h-5" />
+                  Quick Presets
+                </CardTitle>
+                <CardDescription>
+                  Choose a preset optimized for your system's capabilities
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(memoryPresets).map(([key, preset]) => (
+                    <Button
+                      key={key}
+                      variant="outline"
+                      onClick={() => applyPreset(key as keyof typeof memoryPresets)}
+                      className="flex flex-col items-start h-auto p-4 hover:bg-muted/50"
+                    >
+                      <div className="flex items-center gap-2 w-full mb-2">
+                        <HardDrive className="w-4 h-4" />
+                        <span className="font-medium capitalize">
+                          {key.replace('-', ' ')}
+                        </span>
+                      </div>
+                      <div className="text-xs text-left space-y-1 opacity-80">
+                        <div>RAM: {preset.memoryLimit}MB</div>
+                        <div>Context: {preset.contextWindow}t</div>
+                        <div className={getMemoryUsageColor(preset.memoryLimit)}>
+                          {preset.quantization}
+                        </div>
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Inference Backend */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Cpu className="w-5 h-5" />
+                  Inference Backend
+                </CardTitle>
+                <CardDescription>
+                  Choose how models will be executed on your system
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="backend" className="text-base">Backend Type</Label>
+                    <p className="text-sm text-muted-foreground">
+                      CPU is more compatible, GPU offers better performance
+                    </p>
+                  </div>
+                  <Select
+                    value={config.inferenceBackend}
+                    onValueChange={(value: LoRAConfig['inferenceBackend']) =>
+                      updateConfig({ inferenceBackend: value })
+                    }
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ollama-cpu">CPU Only (Ollama)</SelectItem>
+                      <SelectItem value="ollama-gpu">GPU Accelerated (Ollama)</SelectItem>
+                      <SelectItem value="webgpu" disabled>WebGPU (Browser) - Coming Soon</SelectItem>
+                      <SelectItem value="wasm" disabled>WASM (Browser) - Coming Soon</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="gpu-toggle" className="text-base">Enable GPU Acceleration</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Uses GPU for faster inference (requires compatible hardware)
+                    </p>
+                  </div>
+                  <Switch
+                    id="gpu-toggle"
+                    checked={config.enableGPU}
+                    onCheckedChange={(checked: boolean) => updateConfig({ enableGPU: checked })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="threads" className="text-base">CPU Threads</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Number of CPU threads to use (-1 = auto-detect)
+                    </p>
+                  </div>
+                  <Select
+                    value={config.threads.toString()}
+                    onValueChange={(value) => updateConfig({ threads: parseInt(value) })}
+                  >
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="-1">Auto</SelectItem>
+                      <SelectItem value="1">1 Thread</SelectItem>
+                      <SelectItem value="2">2 Threads</SelectItem>
+                      <SelectItem value="4">4 Threads</SelectItem>
+                      <SelectItem value="8">8 Threads</SelectItem>
+                      <SelectItem value="16">16 Threads</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Memory Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <HardDrive className="w-5 h-5" />
+                  Memory Management
+                </CardTitle>
+                <CardDescription>
+                  Control memory usage and context window size
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-base">Memory Limit</Label>
+                    <Badge className={getMemoryUsageColor(config.memoryLimit)}>
+                      {config.memoryLimit} MB
+                    </Badge>
+                  </div>
+                  <Slider
+                    value={[config.memoryLimit]}
+                    onValueChange={([value]: number[]) => updateConfig({ memoryLimit: value })}
+                    max={32768}
+                    min={1024}
+                    step={512}
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>1GB</span>
+                    <span>32GB</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-base">Context Window</Label>
+                    <Badge variant="outline">
+                      {config.contextWindow} tokens
+                    </Badge>
+                  </div>
+                  <Slider
+                    value={[config.contextWindow]}
+                    onValueChange={([value]: number[]) => updateConfig({ contextWindow: value })}
+                    max={32768}
+                    min={512}
+                    step={512}
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>512</span>
+                    <span>32K</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="quantization" className="text-base">Model Quantization</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Lower quantization uses less memory but may reduce quality
+                    </p>
+                  </div>
+                  <Select
+                    value={config.quantization}
+                    onValueChange={(value: LoRAConfig['quantization']) =>
+                      updateConfig({ quantization: value })
+                    }
+                  >
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Q4_K_M">Q4_K_M (Best balance)</SelectItem>
+                      <SelectItem value="Q5_K_M">Q5_K_M (Higher quality)</SelectItem>
+                      <SelectItem value="Q8_0">Q8_0 (High quality)</SelectItem>
+                      <SelectItem value="FP16">FP16 (Maximum quality)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Action Buttons */}
+            <div className="flex justify-between items-center pt-6 border-t">
+              <Button variant="outline" onClick={resetToDefault}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset to Defaults
+              </Button>
+
+              <Button onClick={saveConfig} disabled={!hasUnsavedChanges}>
+                <Save className="w-4 h-4 mr-2" />
+                Save Settings
+              </Button>
+            </div>
+          </div>
+        );
+
+      case 'environment':
+        return (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="w-5 h-5" />
+                  Environment Configuration
+                </CardTitle>
+                <CardDescription>
+                  Configure external services and environment variables
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="ollama-host" className="text-base">Ollama Host</Label>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      The URL where Ollama is running. Default is http://localhost:11434
+                    </p>
+                    <input
+                      id="ollama-host"
+                      type="text"
+                      placeholder="http://localhost:11434"
+                      defaultValue={typeof window !== 'undefined' ? (localStorage.getItem('ollama_host') || process.env.OLLAMA_HOST || 'http://localhost:11434') : (process.env.OLLAMA_HOST || 'http://localhost:11434')}
+                      className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                      onChange={(e) => {
+                        // Store in localStorage for client-side use
+                        localStorage.setItem('ollama_host', e.target.value);
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      This setting is stored locally and used for API calls. Restart may be required for changes to take effect.
+                    </p>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-3">
+                    <h4 className="font-medium">Ollama Setup Instructions</h4>
+                    <div className="bg-muted p-4 rounded-lg text-sm space-y-2">
+                      <div className="font-medium">1. Install Ollama:</div>
+                      <div className="font-mono text-xs bg-background p-2 rounded">
+                        # Download from: https://ollama.ai/download
+                      </div>
+
+                      <div className="font-medium">2. Start Ollama service:</div>
+                      <div className="font-mono text-xs bg-background p-2 rounded">
+                        ollama serve
+                      </div>
+
+                      <div className="font-medium">3. Pull a model (optional):</div>
+                      <div className="font-mono text-xs bg-background p-2 rounded">
+                        ollama pull llama2
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm">
+                        <div className="font-medium text-blue-900 dark:text-blue-100">Custom Host Configuration</div>
+                        <div className="text-blue-700 dark:text-blue-300 mt-1">
+                          If you're running Ollama on a different machine or port, update the host URL above.
+                          The format should be: http://hostname:port
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      case 'knowledge':
+        return (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpen className="w-5 h-5" />
+                  Knowledge Base
+                </CardTitle>
+                <CardDescription>
+                  Manage your knowledge base and learning preferences
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-center py-8">
+                  <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">Knowledge Base Coming Soon</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Advanced knowledge management and learning features will be available in a future update.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      case 'about':
+        return (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Info className="w-5 h-5" />
+                  About LoRA
+                </CardTitle>
+                <CardDescription>
+                  Learn more about LoRA: The Second Brain
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold mb-2">LoRA: The Second Brain</h2>
+                  <p className="text-muted-foreground">Version 0.1.0</p>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-medium mb-2">What is LoRA?</h3>
+                    <p className="text-sm text-muted-foreground">
+                      LoRA (your project) is an offline personal AI hub. Think of it as your own private assistant + second brain that lives entirely on your device.
+                    </p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-medium mb-2">Core Features</h3>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• <strong>Offline AI:</strong> Powered by engines like llama.cpp, Ollama, or vLLM</li>
+                      <li>• <strong>Open Model Freedom:</strong> Use LoRA adapters to fine-tune models</li>
+                      <li>• <strong>Second Brain:</strong> Remembers and connects your thoughts like Obsidian + memory + AI</li>
+                      <li>• <strong>Privacy & Control:</strong> Everything happens locally, no external servers</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-medium mb-2">System Information</h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <div className="font-medium">Backend</div>
+                        <div className="text-muted-foreground">{config.inferenceBackend}</div>
+                      </div>
+                      <div>
+                        <div className="font-medium">GPU</div>
+                        <div className="text-muted-foreground">{config.enableGPU ? 'Enabled' : 'Disabled'}</div>
+                      </div>
+                      <div>
+                        <div className="font-medium">Threads</div>
+                        <div className="text-muted-foreground">{config.threads === -1 ? 'Auto' : config.threads}</div>
+                      </div>
+                      <div>
+                        <div className="font-medium">Performance</div>
+                        <div className="text-muted-foreground">{performance.label}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Blurred Background */}
+      <div
+        className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Settings Modal */}
+      <div className="relative w-full max-w-6xl h-[90vh] bg-background border rounded-lg shadow-lg overflow-hidden">
+        <div className="flex h-full">
+          {/* Sidebar */}
+          <div className="w-64 border-r bg-muted/30">
+            <div className="p-6 border-b">
+              <div className="flex items-center gap-2">
+                <Settings className="w-6 h-6" />
+                <h2 className="text-lg font-semibold">Settings</h2>
+              </div>
+            </div>
+
+            <nav className="p-4 space-y-2">
+              {sections.map((section) => {
+                const Icon = section.icon;
+                return (
+                  <button
+                    key={section.id}
+                    onClick={() => setActiveSection(section.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                      activeSection === section.id
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="font-medium">{section.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b">
+              <div>
+                <h1 className="text-2xl font-bold">
+                  {sections.find(s => s.id === activeSection)?.label}
+                </h1>
+                <p className="text-muted-foreground mt-1">
+                  {activeSection === 'account' && 'Manage your account and subscription'}
+                  {activeSection === 'preferences' && 'Customize your LoRA experience'}
+                  {activeSection === 'environment' && 'Configure external services and connections'}
+                  {activeSection === 'knowledge' && 'Manage your knowledge base'}
+                  {activeSection === 'about' && 'Learn more about LoRA'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {activeSection === 'preferences' && hasUnsavedChanges && (
+                  <Badge variant="secondary" className="animate-pulse">
+                    Unsaved Changes
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onClose}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <ScrollArea className="flex-1 p-6">
+              {renderSectionContent()}
+            </ScrollArea>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

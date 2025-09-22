@@ -152,7 +152,7 @@ export default function ChatInput({
               size="sm"
               variant="ghost"
               className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-muted"
-              disabled={input.length === 0}>
+              disabled={input.length === 0 || !model}>
               <AiOutlineEnter size={16} />
             </Button>
           </div>

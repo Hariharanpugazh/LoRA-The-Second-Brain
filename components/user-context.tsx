@@ -38,8 +38,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (currentUser) {
         setCurrentUser(currentUser);
       }
+    } else if (users.length > 0) {
+      // No stored user or user not found, clear localStorage
+      localStorage.removeItem("lora_current_user");
+      setCurrentUser(null);
     }
-    setIsLoading(isLoadingUsers);
+    // Set loading to false only after users are loaded
+    if (!isLoadingUsers) {
+      setIsLoading(false);
+    }
   }, [users, isLoadingUsers]);
 
   const createUser = async (name: string, password: string): Promise<boolean> => {

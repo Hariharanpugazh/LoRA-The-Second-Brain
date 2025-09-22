@@ -1,15 +1,10 @@
 "use server";
 
 import { createStreamableValue } from "ai/rsc";
-import { CoreMessage, streamText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { CoreMessage } from "ai";
+import { modelService } from "@/lib/model-service";
 import { rateLimit } from "@/lib/ratelimit";
 import { headers } from "next/headers";
-
-const nim = createOpenAI({
-  baseURL: "https://integrate.api.nvidia.com/v1",
-  apiKey: process.env.NVIDIA_NIM_API_KEY,
-});
 
 export async function continueConversation(
   messages: CoreMessage[],
@@ -23,14 +18,40 @@ export async function continueConversation(
     throw new Error(`Rate Limit Exceeded for ${ip}`);
   }
 
-  const result = await streamText({
-    model: nim(model),
-    messages,
-    temperature: 0.8,
-    topP: 0.7,
-    maxTokens: 1024,
-  });
+  // Check if Ollama is running
+  const isOllamaRunning = await modelService.checkOllamaStatus();
+  if (!isOllamaRunning) {
+    throw new Error("Ollama is not running. Please start Ollama and ensure it's accessible at http://localhost:11434");
+  }
 
-  const stream = createStreamableValue(result.textStream);
-  return stream.value;
+  try {
+    const response = await modelService.generateResponse(model, messages, {
+      temperature: 0.8,
+      topP: 0.7,
+      maxTokens: 1024,
+    });
+
+    const stream = createStreamableValue();
+
+    // Handle streaming response
+    (async () => {
+      try {
+        let fullResponse = "";
+        for await (const chunk of response) {
+          if (chunk.done) break;
+          const content = chunk.message?.content || "";
+          fullResponse += content;
+          stream.update(fullResponse);
+        }
+        stream.done();
+      } catch (error) {
+        stream.error(error as Error);
+      }
+    })();
+
+    return stream.value;
+  } catch (error) {
+    console.error("Error in continueConversation:", error);
+    throw new Error(`Failed to generate response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }

@@ -21,13 +21,15 @@ import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { useConversations, useCreateConversation, useUpdateConversation } from "@/lib/database-hooks";
 import { useConversation } from "./conversation-context";
+import { useModel } from "./app-content";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-export default function Chat({ currentModel, onModelChange }: { currentModel: string; onModelChange: (model: string) => void }) {
+export default function Chat() {
   const { currentUser } = useUser();
   const { currentConversationId, setCurrentConversationId } = useConversation();
+  const { currentModel, onModelChange } = useModel();
   const { data: conversations = [], isLoading: isLoadingConversations } = useConversations(currentUser?.id || '');
   const createConversationMutation = useCreateConversation();
   const updateConversationMutation = useUpdateConversation();
@@ -112,6 +114,10 @@ export default function Chat({ currentModel, onModelChange }: { currentModel: st
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (input.trim().length === 0) return;
+    if (!currentModel) {
+      toast.error("Please select a model first");
+      return;
+    }
 
     const newMessages: CoreMessage[] = [
       ...messages,

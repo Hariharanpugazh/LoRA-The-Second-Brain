@@ -6,6 +6,7 @@ import {
   ChevronsUpDown,
   CreditCard,
   LogOut,
+  Settings,
   Sparkles,
   User,
   Users,
@@ -37,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SettingsModal } from "@/components/settings-modal";
 
 export function NavUser() {
   const { users, currentUser, logout, switchUser } = useUser();
@@ -47,6 +49,7 @@ export function NavUser() {
   const [isSwitching, setIsSwitching] = useState(false);
   // ✨ FIX: Declare the 'error' state variable and its setter function
   const [error, setError] = useState("");
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   if (!currentUser) return null;
 
@@ -167,9 +170,9 @@ export function NavUser() {
                   <User className="h-4 w-4 mr-2" />
                   Account
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Billing
+                <DropdownMenuItem onClick={() => setShowSettingsModal(true)}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Bell className="h-4 w-4 mr-2" />
@@ -219,6 +222,11 @@ export function NavUser() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+      />
     </>
   );
 }

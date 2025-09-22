@@ -4,20 +4,17 @@ import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { SidebarTrigger } from "./ui/sidebar";
 import { useUser } from "./user-context";
 import { ModelSelector } from "./model-selector";
+import { useModel } from "./app-content";
 
-type NavProps = {
-  currentModel: string;
-  onModelChange: (model: string) => void;
-};
-
-export default function Nav({ currentModel, onModelChange }: NavProps) {
+export default function Nav() {
   const { currentUser } = useUser();
+  const { currentModel, onModelChange } = useModel();
 
   return (
     <nav className="fixed flex w-full items-center bg-background p-6 md:bg-transparent z-40">
       <div className="flex items-center gap-4">
         <SidebarTrigger className="h-8 w-8" />
-     us   <ModelSelector currentModel={currentModel} onModelChange={onModelChange} />
+     <ModelSelector currentModel={currentModel} onModelChange={onModelChange} />
       </div>
 
       {/* Fixed right side elements */}
