@@ -149,7 +149,7 @@ export function SeeAllFilesDialog({ open, onOpenChange }: SeeAllFilesDialogProps
       case 'folder':
         return <FolderOpen className="h-8 w-8 text-blue-500" />;
       case 'image':
-        return <Image className="h-8 w-8 text-green-500" />;
+        return <Image className="h-8 w-8 text-green-500" aria-hidden="true" />;
       default:
         return <FileText className="h-8 w-8 text-gray-500" />;
     }

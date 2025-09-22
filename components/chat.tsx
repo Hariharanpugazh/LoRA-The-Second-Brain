@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useEffect, useRef, useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { type CoreMessage } from "ai";
 import ChatInput from "./chat-input";
 import { readStreamableValue } from "ai/rsc";
@@ -38,31 +38,10 @@ export default function Chat() {
   const [messages, setMessages] = useState<CoreMessage[]>([]);
   const [input, setInput] = useState("");
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const [streamingContent, setStreamingContent] = useState<string>("");
+  const [isStreaming, setIsStreaming] = useState(false);
 
-  // Load conversations when user changes
-  useEffect(() => {
-    if (!currentUser) {
-      setMessages([]);
-    }
-  }, [currentUser]);
-
-  // Load conversation when currentConversationId changes
-  useEffect(() => {
-    console.log('currentConversationId changed:', currentConversationId, 'messages length:', messages.length);
-    if (currentConversationId) {
-      loadConversation(currentConversationId);
-    } else {
-      console.log('Clearing messages for new chat');
-      setMessages([]);
-    }
-  }, [currentConversationId]);
-
-  const createNewConversation = () => {
-    setMessages([]);
-    setCurrentConversationId(null);
-  };
-
-  const loadConversation = async (conversationId: string) => {
+  const loadConversation = useCallback(async (conversationId: string) => {
     try {
       const conversation = await DatabaseService.getConversationById(conversationId);
       if (conversation) {
@@ -93,6 +72,29 @@ export default function Chat() {
       toast.error('Failed to load conversation');
       setMessages([]);
     }
+  }, [currentUser, onModelChange]);
+
+  // Load conversations when user changes
+  useEffect(() => {
+    if (!currentUser) {
+      setMessages([]);
+    }
+  }, [currentUser]);
+
+  // Load conversation when currentConversationId changes
+  useEffect(() => {
+    console.log('currentConversationId changed:', currentConversationId);
+    if (currentConversationId) {
+      loadConversation(currentConversationId);
+    } else {
+      console.log('Clearing messages for new chat');
+      setMessages([]);
+    }
+  }, [currentConversationId, loadConversation]);
+
+  const createNewConversation = () => {
+    setMessages([]);
+    setCurrentConversationId(null);
   };
 
   const saveConversation = async (messages: CoreMessage[], model: string) => {
@@ -175,90 +177,111 @@ export default function Chat() {
       return;
     }
 
-    const newMessages: CoreMessage[] = [
-      ...messages,
-      { content: input, role: "user" },
-    ];
+    const userMessage = { content: input, role: "user" as const };
+    const newMessages: CoreMessage[] = [...messages, userMessage];
 
     setMessages(newMessages);
     setInput("");
 
     try {
+      // Add an empty assistant message to show typing indicator
+      const messagesWithAssistant = [
+        ...newMessages,
+        { content: "", role: "assistant" as const }
+      ];
+      setMessages(messagesWithAssistant);
+
       const result = await continueConversation(newMessages, currentModel);
 
-      let assistantMessage = "";
+      setIsStreaming(true);
+      let finalAssistantContent = "";
+
       for await (const content of readStreamableValue(result)) {
-        assistantMessage = content as string;
-        setMessages([
-          ...newMessages,
-          {
-            role: "assistant",
-            content: assistantMessage,
-          },
-        ]);
+        finalAssistantContent = content as string;
+        setStreamingContent(finalAssistantContent);
       }
+
+      setIsStreaming(false);
+      setStreamingContent("");
+
+      // Update messages with final content
+      setMessages(prevMessages => {
+        const updatedMessages = [...prevMessages];
+        updatedMessages[updatedMessages.length - 1] = {
+          role: "assistant",
+          content: finalAssistantContent,
+        };
+        return updatedMessages;
+      });
 
       // Save conversation with the complete messages
       const finalMessages: CoreMessage[] = [
         ...newMessages,
-        { role: "assistant", content: assistantMessage }
+        { role: "assistant", content: finalAssistantContent }
       ];
       await saveConversation(finalMessages, currentModel);
 
     } catch (error) {
-      toast.error((error as Error).message);
+      console.error('Error in conversation:', error);
+      // Remove the empty assistant message on error and restore user message only
+      setMessages(newMessages);
+      toast.error((error as Error).message || 'Failed to get AI response');
     }
   };
 
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    // Small delay to ensure DOM updates are complete before scrolling
+    const timeoutId = setTimeout(() => {
+      messageEndRef.current?.scrollIntoView({ behavior: "auto" });
+    }, 50);
+    return () => clearTimeout(timeoutId);
+  }, [messages.length]);
 
   if (messages.length === 0) {
     return (
-      <div className="stretch mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center px-4 pb-[8rem] pt-[6rem] md:px-0 md:pt-[4rem] xl:pt-[2rem] relative">
-
-        <h1 className="text-center text-5xl font-medium tracking-tighter">
-          LoRA: The Second Brain
-        </h1>
-
-        <div className="mt-6 px-3 md:px-0">
-          <h2 className="text-lg font-medium">🔹 What is LoRA: The Second Brain?</h2>
-          <p className="mt-2 text-sm text-primary/80">
-            LoRA (your project) is an offline personal AI hub. Think of it as your own private assistant + second brain that lives entirely on your device. It’s built on top of Open WebUI, but rebranded and extended with extra features so it’s not “just another AI chat.”
-          </p>
-          <p className="mt-2 text-sm text-primary/80">
-            The idea is:
-          </p>
-          <ul className="ml-6 mt-2 flex list-disc flex-col items-start gap-2.5 text-sm text-primary/80">
-            <li>You download free/open models (from Hugging Face, Ollama, etc.) and run them locally.</li>
-            <li>Everything happens offline — no external servers, no spying, no leaks.</li>
-            <li>Instead of being just a chatbot, it becomes a knowledge companion that remembers, organizes, and connects your thoughts.</li>
-          </ul>
-
-          <h2 className="mt-6 text-lg font-medium">🔹 Core Pillars of LoRA</h2>
-          <div className="mt-2 space-y-3 text-sm text-primary/80">
-            <p><strong>Offline AI:</strong> Powered by engines like llama.cpp, Ollama, or vLLM depending on hardware.</p>
-            <p><strong>Open Model Freedom:</strong> Lets you use LoRA adapters to fine-tune models for coding, teaching, research, or creative writing.</p>
-            <p><strong>Second Brain Features:</strong> Lets you recall past thoughts: "What did I plan last Monday?" AI builds connections between your ideas like Obsidian + memory + AI.</p>
-            <p><strong>Privacy & Control:</strong> Optional encryption so even if someone grabs your files, they can't read them.</p>
-            <p><strong>Custom Branding & UX:</strong> Optimized for speed, memory, and usability so it feels polished.</p>
+      <div className="stretch mx-auto flex min-h-screen w-full max-w-xl flex-col px-4 pt-[6rem] md:px-0 md:pt-[4rem] xl:pt-[2rem] relative">
+        <div className="flex-1 flex flex-col justify-center">
+          <h1 className="text-center text-5xl font-medium tracking-tighter">
+            LoRA: The Second Brain
+          </h1>
+          <div className="mt-6 px-3 md:px-0">
+            <h2 className="text-lg font-medium">🔹 What is LoRA: The Second Brain?</h2>
+            <p className="mt-2 text-sm text-primary/80">
+              LoRA (your project) is an offline personal AI hub. Think of it as your own private assistant + second brain that lives entirely on your device. It&apos;s built on top of Open WebUI, but rebranded and extended with extra features so it&apos;s not &quot;just another AI chat.&quot;
+            </p>
+            <p className="mt-2 text-sm text-primary/80">
+              The idea is:
+            </p>
+            <ul className="ml-6 mt-2 flex list-disc flex-col items-start gap-2.5 text-sm text-primary/80">
+              <li>You download free/open models (from Hugging Face, Ollama, etc.) and run them locally.</li>
+              <li>Everything happens offline — no external servers, no spying, no leaks.</li>
+              <li>Instead of being just a chatbot, it becomes a knowledge companion that remembers, organizes, and connects your thoughts.</li>
+            </ul>
+            <h2 className="mt-6 text-lg font-medium">🔹 Core Pillars of LoRA</h2>
+            <div className="mt-2 space-y-3 text-sm text-primary/80">
+              <p><strong>Offline AI:</strong> Powered by engines like llama.cpp, Ollama, or vLLM depending on hardware.</p>
+              <p><strong>Open Model Freedom:</strong> Lets you use LoRA adapters to fine-tune models for coding, teaching, research, or creative writing.</p>
+              <p><strong>Second Brain Features:</strong> Lets you recall past thoughts: &quot;What did I plan last Monday?&quot; AI builds connections between your ideas like Obsidian + memory + AI.</p>
+              <p><strong>Privacy & Control:</strong> Optional encryption so even if someone grabs your files, they can't read them.</p>
+              <p><strong>Custom Branding & UX:</strong> Optimized for speed, memory, and usability so it feels polished.</p>
+            </div>
           </div>
         </div>
-
-        <ChatInput
-          input={input}
-          setInput={setInput}
-          handleSubmit={handleSubmit}
-          model={currentModel}
-          handleModelChange={handleModelChange}
-        />
+        <div className="sticky bottom-0 bg-background/95 backdrop-blur-sm border-t">
+          <ChatInput
+            input={input}
+            setInput={setInput}
+            handleSubmit={handleSubmit}
+            model={currentModel}
+            handleModelChange={handleModelChange}
+          />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="stretch mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 pb-[8rem] pt-24 md:px-0 relative">
+    <div className="stretch mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 pt-24 md:px-0 relative">
       {/* Conversation Header */}
       {currentConversationId && (
         <div className="flex items-center justify-between mb-4 pb-2 border-b">
@@ -283,36 +306,43 @@ export default function Chat() {
         </div>
       )}
 
-      {messages.map((m, i) => (
-        <div key={i} className={cn("mb-4 p-2", m.role === "user" ? "flex justify-end" : "flex justify-start")}>
-          <div className={cn("flex items-start max-w-[80%]", m.role === "user" ? "flex-row-reverse" : "flex-row")}>
-            <div
-              className={cn(
-                "flex size-8 shrink-0 select-none items-center justify-center rounded-lg",
-                m.role === "user"
-                  ? "border bg-background ml-2"
-                  : "bg-nvidia border border-[#628f10] text-primary-foreground mr-2",
-              )}>
-              {m.role === "user" ? <FaUser /> : <FaBrain />}
+      <div className="flex-1 overflow-y-auto pb-4">
+        {messages.map((m, i) => {
+          return (
+            <div key={`${i}-${m.content?.toString().length || 0}`} className={cn("mb-4 p-2", m.role === "user" ? "flex justify-end" : "flex justify-start")}>
+              <div className={cn("flex items-start max-w-[80%]", m.role === "user" ? "flex-row-reverse" : "flex-row")}>
+                <div
+                  className={cn(
+                    "flex size-8 shrink-0 select-none items-center justify-center rounded-lg",
+                    m.role === "user"
+                      ? "border bg-background ml-2"
+                      : "bg-nvidia border border-[#628f10] text-primary-foreground mr-2",
+                  )}>
+                  {m.role === "user" ? <FaUser /> : <FaBrain />}
+                </div>
+                <div className="space-y-2 overflow-hidden px-1">
+                  <MemoizedReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    className="text-sm">
+                    {isStreaming && i === messages.length - 1 && m.role === "assistant" ? streamingContent : (m.content as string)}
+                  </MemoizedReactMarkdown>
+                </div>
+              </div>
             </div>
-            <div className="space-y-2 overflow-hidden px-1">
-              <MemoizedReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                className="text-sm">
-                {m.content as string}
-              </MemoizedReactMarkdown>
-            </div>
-          </div>
-        </div>
-      ))}
-      <div ref={messageEndRef} />
-      <ChatInput
-        input={input}
-        setInput={setInput}
-        handleSubmit={handleSubmit}
-        model={currentModel}
-        handleModelChange={handleModelChange}
-      />
+          );
+        })}
+        <div ref={messageEndRef} />
+      </div>
+
+      <div className="sticky bottom-0 bg-background/95 backdrop-blur-sm border-t">
+        <ChatInput
+          input={input}
+          setInput={setInput}
+          handleSubmit={handleSubmit}
+          model={currentModel}
+          handleModelChange={handleModelChange}
+        />
+      </div>
     </div>
   );
 }
