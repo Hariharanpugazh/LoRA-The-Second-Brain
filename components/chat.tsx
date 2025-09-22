@@ -6,7 +6,8 @@ import { type CoreMessage } from "ai";
 import { BsNvidia } from "react-icons/bs";
 import ChatInput from "./chat-input";
 import { readStreamableValue } from "ai/rsc";
-import { FaUserAstronaut } from "react-icons/fa6";
+import { FaUser } from "react-icons/fa6";
+import { FaBrain } from "react-icons/fa6";
 import { continueConversation } from "../app/actions";
 import { toast } from "sonner";
 import remarkGfm from "remark-gfm";
@@ -14,44 +15,53 @@ import { MemoizedReactMarkdown } from "./markdown";
 import { useUser } from "./user-context";
 import { DatabaseService, Conversation } from "@/lib/database";
 import { Button } from "./ui/button";
-import { MessageSquare, Plus, History } from "lucide-react";
+import { MessageSquare, History } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { useConversations, useCreateConversation, useUpdateConversation } from "@/lib/database-hooks";
+import { useConversation } from "./conversation-context";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-export default function Chat() {
+export default function Chat({ currentModel, onModelChange }: { currentModel: string; onModelChange: (model: string) => void }) {
   const { currentUser } = useUser();
+  const { currentConversationId, setCurrentConversationId } = useConversation();
   const { data: conversations = [], isLoading: isLoadingConversations } = useConversations(currentUser?.id || '');
   const createConversationMutation = useCreateConversation();
   const updateConversationMutation = useUpdateConversation();
   const [messages, setMessages] = useState<CoreMessage[]>([]);
   const [input, setInput] = useState("");
-  const [model, setModel] = useState("google/gemma-2-9b-it");
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
 
   // Load conversations when user changes
   useEffect(() => {
     if (!currentUser) {
-      setCurrentConversationId(null);
       setMessages([]);
     }
   }, [currentUser]);
 
+  // Load conversation when currentConversationId changes
+  useEffect(() => {
+    if (currentConversationId) {
+      loadConversation(currentConversationId);
+    } else {
+      setMessages([]);
+    }
+  }, [currentConversationId]);
+
   const createNewConversation = () => {
-    setCurrentConversationId(null);
     setMessages([]);
+    setCurrentConversationId(null);
   };
 
   const loadConversation = async (conversationId: string) => {
     try {
       const conversation = await DatabaseService.getConversationById(conversationId);
       if (conversation) {
-        setCurrentConversationId(conversationId);
         setMessages(conversation.messages);
-        setModel(conversation.model);
+        onModelChange(conversation.model);
       }
     } catch (error) {
       console.error('Error loading conversation:', error);
@@ -93,7 +103,7 @@ export default function Chat() {
   };
 
   const handleModelChange = async (newModel: string) => {
-    setModel(newModel);
+    onModelChange(newModel);
     if (messages.length > 0) {
       await saveConversation(messages, newModel);
     }
@@ -112,7 +122,7 @@ export default function Chat() {
     setInput("");
 
     try {
-      const result = await continueConversation(newMessages, model);
+      const result = await continueConversation(newMessages, currentModel);
 
       let assistantMessage = "";
       for await (const content of readStreamableValue(result)) {
@@ -131,7 +141,7 @@ export default function Chat() {
         ...newMessages,
         { role: "assistant", content: assistantMessage }
       ];
-      await saveConversation(finalMessages, model);
+      await saveConversation(finalMessages, currentModel);
 
     } catch (error) {
       toast.error((error as Error).message);
@@ -207,7 +217,7 @@ export default function Chat() {
           input={input}
           setInput={setInput}
           handleSubmit={handleSubmit}
-          model={model}
+          model={currentModel}
           handleModelChange={handleModelChange}
         />
       </div>
@@ -215,20 +225,10 @@ export default function Chat() {
   }
 
   return (
-    <div className="stretch mx-auto w-full max-w-2xl px-4 py-[8rem] pt-24 md:px-0 relative">
+    <div className="stretch mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 pb-[8rem] pt-24 md:px-0 relative">
       {/* Conversation Controls */}
       {currentUser && (
-        <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
-          <Button
-            onClick={createNewConversation}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            New Chat
-          </Button>
-
+        <div className="absolute top-4 left-4 right-4 flex items-center justify-end">
           {conversations.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -257,22 +257,24 @@ export default function Chat() {
       )}
 
       {messages.map((m, i) => (
-        <div key={i} className="mb-4 flex items-start p-2">
-          <div
-            className={cn(
-              "flex size-8 shrink-0 select-none items-center justify-center rounded-lg",
-              m.role === "user"
-                ? "border bg-background"
-                : "bg-nvidia border border-[#628f10] text-primary-foreground",
-            )}>
-            {m.role === "user" ? <FaUserAstronaut /> : <BsNvidia />}
-          </div>
-          <div className="ml-4 flex-1 space-y-2 overflow-hidden px-1">
-            <MemoizedReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              className="prose prose-sm break-words dark:prose-invert prose-pre:rounded-lg prose-pre:bg-zinc-100 prose-pre:p-4 prose-pre:text-zinc-900 dark:prose-pre:bg-zinc-900 dark:prose-pre:text-zinc-100">
-              {m.content as string}
-            </MemoizedReactMarkdown>
+        <div key={i} className={cn("mb-4 p-2", m.role === "user" ? "flex justify-end" : "flex justify-start")}>
+          <div className={cn("flex items-start max-w-[80%]", m.role === "user" ? "flex-row-reverse" : "flex-row")}>
+            <div
+              className={cn(
+                "flex size-8 shrink-0 select-none items-center justify-center rounded-lg",
+                m.role === "user"
+                  ? "border bg-background ml-2"
+                  : "bg-nvidia border border-[#628f10] text-primary-foreground mr-2",
+              )}>
+              {m.role === "user" ? <FaUser /> : <FaBrain />}
+            </div>
+            <div className="space-y-2 overflow-hidden px-1">
+              <MemoizedReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                className="text-sm">
+                {m.content as string}
+              </MemoizedReactMarkdown>
+            </div>
           </div>
         </div>
       ))}
@@ -281,7 +283,7 @@ export default function Chat() {
         input={input}
         setInput={setInput}
         handleSubmit={handleSubmit}
-        model={model}
+        model={currentModel}
         handleModelChange={handleModelChange}
       />
     </div>

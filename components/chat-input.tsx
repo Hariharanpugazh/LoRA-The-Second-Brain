@@ -1,32 +1,14 @@
 "use client";
 
 import { Button } from "./ui/button";
-import { BsNvidia } from "react-icons/bs";
-import { ChevronDown } from "lucide-react";
 import Textarea from "react-textarea-autosize";
 import { AiOutlineEnter } from "react-icons/ai";
-import { FaMeta, FaGoogle } from "react-icons/fa6";
-import { models } from "@/lib/models";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Upload, Brain, Search, BookOpen, Clock, X } from "lucide-react";
+import { useState, useEffect } from "react";
 
-const getModelIcon = (modelName: string) => {
-  if (modelName.startsWith("meta")) {
-    return <FaMeta className="mr-1.5" />;
-  } else if (modelName.startsWith("google")) {
-    return <FaGoogle className="mr-1.5" />;
-  } else if (modelName.startsWith("ibm")) {
-    return <BsNvidia className="mr-1.5" />;
-  } else {
-    return <BsNvidia className="mr-1.5" />;
-  }
-};
+type AIMode = "think-longer" | "deep-research" | "web-search" | "study";
 
-type ChatInputRSCProps = {
+type ChatInputProps = {
   input: string;
   setInput: (input: string) => void;
   handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
@@ -40,41 +22,102 @@ export default function ChatInput({
   handleSubmit,
   model,
   handleModelChange,
-}: ChatInputRSCProps) {
+}: ChatInputProps) {
+  const [selectedMode, setSelectedMode] = useState<AIMode | null>(null);
+  const [showModeSelector, setShowModeSelector] = useState(false);
+
+  const modes = [
+    { id: "think-longer" as AIMode, label: "Think Longer", icon: Clock, shortcut: "/think" },
+    { id: "deep-research" as AIMode, label: "Deep Research", icon: Search, shortcut: "/research" },
+    { id: "web-search" as AIMode, label: "Web Search", icon: Search, shortcut: "/search" },
+    { id: "study" as AIMode, label: "Study Mode", icon: BookOpen, shortcut: "/study" },
+  ];
+
+  // Detect slash commands
+  useEffect(() => {
+    const slashCommands = modes.map(mode => mode.shortcut);
+    const lastWord = input.split(' ').pop() || '';
+
+    if (slashCommands.includes(lastWord)) {
+      const mode = modes.find(m => m.shortcut === lastWord);
+      if (mode) {
+        setSelectedMode(mode.id);
+        setInput(input.replace(lastWord, '').trim());
+      }
+    }
+  }, [input]);
+
+  const handleModeSelect = (mode: AIMode) => {
+    setSelectedMode(mode);
+    setShowModeSelector(false);
+  };
+
+  const clearMode = () => {
+    setSelectedMode(null);
+  };
+
+  const handleFileUpload = () => {
+    // Implement file upload logic
+    console.log("File upload clicked");
+  };
+
+  const getPlaceholder = () => {
+    if (selectedMode) {
+      const mode = modes.find(m => m.id === selectedMode);
+      return `Ask me anything in ${mode?.label} mode...`;
+    }
+    return "Type / for modes, or ask me anything!";
+  };
+
   return (
     <form
       onSubmit={handleSubmit}
-      className="absolute bottom-0 left-0 right-0 flex justify-center bg-gradient-to-t from-background via-background/95 to-background/80 backdrop-blur-sm">
+      className="absolute bottom-4 left-0 right-0 flex justify-center bg-gradient-to-t from-background via-background/95 to-background/80 backdrop-blur-sm">
       <div className="w-full max-w-2xl items-center px-6">
         <div className="relative flex w-full flex-col items-start gap-2">
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="rounded-full">
-                {getModelIcon(model)}
-                {model}
-                <ChevronDown size={14} className="ml-1.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {models.map((modelName) => (
-                <DropdownMenuItem
-                  key={modelName}
-                  onSelect={() => handleModelChange(modelName)}>
-                  {getModelIcon(modelName)} {modelName}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Mode indicator and clear button */}
+          {selectedMode && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1 px-2 py-1 bg-muted rounded-full">
+                {(() => {
+                  const mode = modes.find(m => m.id === selectedMode);
+                  const Icon = mode?.icon;
+                  return Icon ? <Icon size={12} /> : null;
+                })()}
+                <span>{modes.find(m => m.id === selectedMode)?.label}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearMode}
+                  className="h-4 w-4 p-0 ml-1 hover:bg-muted-foreground/20"
+                >
+                  <X size={10} />
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="relative flex w-full items-center">
+            {/* Mode selector button */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowModeSelector(!showModeSelector)}
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-6 w-6 p-0 hover:bg-muted"
+            >
+              <Brain size={14} className={selectedMode ? "text-primary" : "text-muted-foreground"} />
+            </Button>
+
             <Textarea
               name="message"
               rows={1}
               maxRows={5}
               tabIndex={0}
-              placeholder="Try asking me something!"
+              placeholder={getPlaceholder()}
               spellCheck={false}
               value={input}
-              className="focus-visible:ring-nvidia min-h-12 w-full resize-none rounded-[28px] border border-input bg-muted pb-1 pl-4 pr-10 pt-3 text-sm shadow-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+              className="focus-visible:ring-nvidia min-h-10 w-full resize-none rounded-lg border border-input bg-background pb-1 pl-10 pr-20 pt-2 text-sm shadow-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (
@@ -91,16 +134,53 @@ export default function ChatInput({
                 }
               }}
             />
+
+            {/* Upload button */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleFileUpload}
+              className="absolute right-12 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-muted"
+            >
+              <Upload size={14} />
+            </Button>
+
+            {/* Send button */}
             <Button
               type="submit"
-              size="icon"
+              size="sm"
               variant="ghost"
-              className="absolute right-2 top-1/2 mr-1 -translate-y-1/2 transform"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-muted"
               disabled={input.length === 0}>
-              <AiOutlineEnter size={20} />
+              <AiOutlineEnter size={16} />
             </Button>
           </div>
+
+          {/* Mode selector dropdown */}
+          {showModeSelector && (
+            <div className="absolute bottom-full mb-2 left-2 bg-popover/95 backdrop-blur-sm border border-border/50 rounded-2xl shadow-xl p-3 z-20 min-w-[280px]">
+              <div className="grid grid-cols-2 gap-2">
+                {modes.map((mode) => {
+                  const Icon = mode.icon;
+                  return (
+                    <Button
+                      key={mode.id}
+                      variant={selectedMode === mode.id ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => handleModeSelect(mode.id)}
+                      className="flex items-center gap-2 justify-start text-xs h-9 rounded-xl hover:bg-muted/80 transition-colors"
+                    >
+                      <Icon size={12} />
+                      <span>{mode.label}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
+
         <p className="p-2 text-center text-xs text-zinc-400">
           Brought to you by{" "}
           <a

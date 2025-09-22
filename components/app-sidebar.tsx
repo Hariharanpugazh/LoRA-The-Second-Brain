@@ -1,23 +1,18 @@
 "use client";
 
 import * as React from "react";
-import {
-  AudioWaveform,
-  BookOpen,
-  Bot,
-  Command,
-  Frame,
-  GalleryVerticalEnd,
-  Map,
-  PieChart,
-  Settings2,
-  SquareTerminal,
-} from "lucide-react";
+import { GalleryVerticalEnd, AudioWaveform } from "lucide-react";
 
-import { NavMain } from "@/components/nav-main";
-import { NavProjects } from "@/components/nav-projects";
 import { NavUser } from "@/components/nav-user";
 import { TeamSwitcher } from "@/components/team-switcher";
+import { SidebarSearch } from "@/components/sidebar-search";
+import {
+  SidebarNewChat,
+  SidebarFiles,
+  SidebarProjects,
+  SidebarPinnedChats,
+  SidebarRecentChats
+} from "@/components/sidebar-sections";
 import {
   Sidebar,
   SidebarContent,
@@ -35,9 +30,9 @@ const data = {
   },
   teams: [
     {
-      name: "LoRA Team",
+      name: "LoRA - The Second Brain",
       logo: GalleryVerticalEnd,
-      plan: "Enterprise",
+      plan: "",
     },
     {
       name: "Personal",
@@ -45,132 +40,49 @@ const data = {
       plan: "Free",
     },
   ],
-  navMain: [
-    {
-      title: "AI Models",
-      url: "#",
-      icon: Bot,
-      isActive: true,
-      items: [
-        {
-          title: "Local Models",
-          url: "#",
-        },
-        {
-          title: "Download Models",
-          url: "#",
-        },
-        {
-          title: "Model Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Chats",
-      url: "#",
-      icon: SquareTerminal,
-      items: [
-        {
-          title: "New Chat",
-          url: "#",
-        },
-        {
-          title: "Chat History",
-          url: "#",
-        },
-        {
-          title: "Saved Conversations",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Knowledge Base",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Documents",
-          url: "#",
-        },
-        {
-          title: "Notes",
-          url: "#",
-        },
-        {
-          title: "Import Files",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Analytics",
-      url: "#",
-      icon: PieChart,
-      items: [
-        {
-          title: "Usage Stats",
-          url: "#",
-        },
-        {
-          title: "Performance",
-          url: "#",
-        },
-        {
-          title: "Reports",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings2,
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Privacy",
-          url: "#",
-        },
-        {
-          title: "Advanced",
-          url: "#",
-        },
-      ],
-    },
-  ],
-  projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: PieChart,
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: Map,
-    },
-  ],
 };
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  onNewChat?: () => void;
+  onSelectConversation?: (conversationId: string) => void;
+  currentConversationId?: string | null;
+}
+
+export function AppSidebar({
+  onNewChat = () => {},
+  onSelectConversation = () => {},
+  currentConversationId = null,
+  ...props
+}: AppSidebarProps) {
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        {/* Search bar at top */}
+        <SidebarSearch />
+
+        {/* New Chat */}
+        <SidebarNewChat onNewChat={onNewChat} />
+
+        {/* Files */}
+        <SidebarFiles />
+
+        {/* Projects */}
+        <SidebarProjects />
+
+        {/* Pinned Chats */}
+        <SidebarPinnedChats
+          onSelectConversation={onSelectConversation}
+          currentConversationId={currentConversationId}
+        />
+
+        {/* Recent Chats */}
+        <SidebarRecentChats
+          onSelectConversation={onSelectConversation}
+          currentConversationId={currentConversationId}
+        />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

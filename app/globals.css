@@ -99,6 +99,14 @@
   body {
     @apply bg-background text-foreground;
   }
+  ::selection {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+  .dark ::selection {
+    background: hsl(262 83% 58%);
+    color: hsl(0 0% 100%);
+  }
 }
 
 ::view-transition-old(root), ::view-transition-new(root) {
