@@ -1,17 +1,17 @@
 import "./globals.css";
-import Nav from "@/components/nav";
 import type { Metadata } from "next";
 import { Figtree } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
-import { Analytics } from "@vercel/analytics/react";
+import { UserProvider } from "@/components/user-context";
+import { AppContent } from "@/components/app-content";
+import { QueryProvider } from "@/components/query-provider";
 
 const FigtreeFont = Figtree({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Next.js AI Chatbot — NVIDIA NIM + Vercel AI SDK",
+  title: "LoRA — The Second Brain",
   description:
-    "An open-source AI chatbot app template built with Next.js, the Vercel AI SDK and NVIDIA NIM.",
+    "An open-source AI chatbot app template built with Next.js, the Vercel AI SDK and local AI models.",
 };
 
 export default function RootLayout({
@@ -27,24 +27,25 @@ export default function RootLayout({
       <meta property="og:image:height" content="832" />
       <meta
         property="og:site_name"
-        content="Next.js AI Chatbot — NVIDIA NIM + Vercel AI SDK"
+        content="LoRA — The Second Brain"
       />
-      <meta property="og:url" content="https://nvidia-nim.vercel.app/" />
+      <meta property="og:url" content="https://lora-ai.vercel.app/" />
       <meta name="twitter:image" content="/twitter-image.png" />
       <meta name="twitter:image:type" content="image/png" />
       <meta name="twitter:image:width" content="1280" />
       <meta name="twitter:image:height" content="832" />
       <body
-        className={`${FigtreeFont.className} min-h-screen font-light selection:bg-nvidia selection:text-white`}>
+        className={`${FigtreeFont.className} min-h-screen font-light selection:bg-lora selection:text-white`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange>
-          <Nav />
-          <Toaster position={"top-center"} richColors />
-          {children}
-          <Analytics />
+          <QueryProvider>
+            <UserProvider>
+              <AppContent>{children}</AppContent>
+            </UserProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

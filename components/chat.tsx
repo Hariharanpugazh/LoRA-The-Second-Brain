@@ -11,19 +11,92 @@ import { continueConversation } from "../app/actions";
 import { toast } from "sonner";
 import remarkGfm from "remark-gfm";
 import { MemoizedReactMarkdown } from "./markdown";
+import { useUser } from "./user-context";
+import { DatabaseService, Conversation } from "@/lib/database";
+import { Button } from "./ui/button";
+import { MessageSquare, Plus, History } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
+import { useConversations, useCreateConversation, useUpdateConversation } from "@/lib/database-hooks";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 export default function Chat() {
+  const { currentUser } = useUser();
+  const { data: conversations = [], isLoading: isLoadingConversations } = useConversations(currentUser?.id || '');
+  const createConversationMutation = useCreateConversation();
+  const updateConversationMutation = useUpdateConversation();
   const [messages, setMessages] = useState<CoreMessage[]>([]);
   const [input, setInput] = useState("");
   const [model, setModel] = useState("google/gemma-2-9b-it");
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
 
-  const handleModelChange = (newModel: string) => {
-    setModel(newModel);
+  // Load conversations when user changes
+  useEffect(() => {
+    if (!currentUser) {
+      setCurrentConversationId(null);
+      setMessages([]);
+    }
+  }, [currentUser]);
+
+  const createNewConversation = () => {
+    setCurrentConversationId(null);
     setMessages([]);
+  };
+
+  const loadConversation = async (conversationId: string) => {
+    try {
+      const conversation = await DatabaseService.getConversationById(conversationId);
+      if (conversation) {
+        setCurrentConversationId(conversationId);
+        setMessages(conversation.messages);
+        setModel(conversation.model);
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+      toast.error('Failed to load conversation');
+    }
+  };
+
+  const saveConversation = async (messages: CoreMessage[], model: string) => {
+    if (!currentUser) return;
+
+    try {
+      const title = messages.length > 0
+        ? ((messages[0].content as string).length > 50
+            ? (messages[0].content as string).slice(0, 50) + '...'
+            : (messages[0].content as string))
+        : 'New Conversation';
+
+      if (currentConversationId) {
+        // Update existing conversation
+        await updateConversationMutation.mutateAsync({
+          id: currentConversationId,
+          updates: { messages, model, title }
+        });
+      } else {
+        // Create new conversation
+        const newConversation = await createConversationMutation.mutateAsync({
+          userId: currentUser.id,
+          title,
+          messages,
+          model
+        });
+        if (newConversation) {
+          setCurrentConversationId(newConversation.id);
+        }
+      }
+    } catch (error) {
+      console.error('Error saving conversation:', error);
+    }
+  };
+
+  const handleModelChange = async (newModel: string) => {
+    setModel(newModel);
+    if (messages.length > 0) {
+      await saveConversation(messages, newModel);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -41,15 +114,25 @@ export default function Chat() {
     try {
       const result = await continueConversation(newMessages, model);
 
+      let assistantMessage = "";
       for await (const content of readStreamableValue(result)) {
+        assistantMessage = content as string;
         setMessages([
           ...newMessages,
           {
             role: "assistant",
-            content: content as string,
+            content: assistantMessage,
           },
         ]);
       }
+
+      // Save conversation after the response is complete
+      const finalMessages: CoreMessage[] = [
+        ...newMessages,
+        { role: "assistant", content: assistantMessage }
+      ];
+      await saveConversation(finalMessages, model);
+
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -61,7 +144,37 @@ export default function Chat() {
 
   if (messages.length === 0) {
     return (
-      <div className="stretch mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center px-4 pb-[8rem] pt-[6rem] md:px-0 md:pt-[4rem] xl:pt-[2rem]">
+      <div className="stretch mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center px-4 pb-[8rem] pt-[6rem] md:px-0 md:pt-[4rem] xl:pt-[2rem] relative">
+        {/* Conversation Controls */}
+        {currentUser && (
+          <div className="absolute top-4 left-4 right-4 flex items-center justify-between"> 
+            {conversations.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="flex items-center gap-2">
+                    <History className="w-4 h-4" />
+                    History ({conversations.length})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                  {conversations.map((conv) => (
+                    <DropdownMenuItem
+                      key={conv.id}
+                      onClick={() => loadConversation(conv.id)}
+                      className="flex flex-col items-start p-3"
+                    >
+                      <div className="font-medium truncate w-full">{conv.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(conv.updatedAt).toLocaleDateString()} • {conv.model}
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        )}
+
         <h1 className="text-center text-5xl font-medium tracking-tighter">
           LoRA: The Second Brain
         </h1>
@@ -102,7 +215,47 @@ export default function Chat() {
   }
 
   return (
-    <div className="stretch mx-auto w-full max-w-2xl px-4 py-[8rem] pt-24 md:px-0">
+    <div className="stretch mx-auto w-full max-w-2xl px-4 py-[8rem] pt-24 md:px-0 relative">
+      {/* Conversation Controls */}
+      {currentUser && (
+        <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
+          <Button
+            onClick={createNewConversation}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            New Chat
+          </Button>
+
+          {conversations.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="flex items-center gap-2">
+                  <History className="w-4 h-4" />
+                  History ({conversations.length})
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80">
+                {conversations.map((conv) => (
+                  <DropdownMenuItem
+                    key={conv.id}
+                    onClick={() => loadConversation(conv.id)}
+                    className="flex flex-col items-start p-3"
+                  >
+                    <div className="font-medium truncate w-full">{conv.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(conv.updatedAt).toLocaleDateString()} • {conv.model}
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      )}
+
       {messages.map((m, i) => (
         <div key={i} className="mb-4 flex items-start p-2">
           <div

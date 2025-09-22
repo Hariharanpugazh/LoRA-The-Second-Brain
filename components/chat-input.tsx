@@ -44,7 +44,7 @@ export default function ChatInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className="fixed bottom-0 left-0 right-0 flex justify-center bg-gradient-to-t from-zinc-100 to-transparent backdrop-blur-lg dark:from-background">
+      className="absolute bottom-0 left-0 right-0 flex justify-center bg-gradient-to-t from-background via-background/95 to-background/80 backdrop-blur-sm">
       <div className="w-full max-w-2xl items-center px-6">
         <div className="relative flex w-full flex-col items-start gap-2">
           <DropdownMenu modal={false}>
@@ -107,8 +107,8 @@ export default function ChatInput({
             target="_blank"
             rel="noopener noreferrer"
             className="md:hover:text-nvidia underline underline-offset-2 transition-all duration-150 ease-linear"
-            href="https://lakshb.dev">
-            lakshb.dev
+            href="https://github.com/Divith123/LoRA-The-Second-Brain">
+            LoRA Team
           </a>
         </p>
       </div>
