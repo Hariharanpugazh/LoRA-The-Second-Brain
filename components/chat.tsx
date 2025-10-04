@@ -45,34 +45,39 @@ export default function Chat() {
     try {
       const conversation = await DatabaseService.getConversationById(conversationId);
       if (conversation) {
-        // If conversation has encrypted data, try to load the decrypted messages
         if (conversation.encryptedPath && currentUser?.password) {
           try {
-            const decryptedConversation = await EncryptedConversationStorage.loadConversation(
+            const decrypted = await EncryptedConversationStorage.loadConversation(
               conversation.encryptedPath,
               currentUser.password
             );
-            setMessages(decryptedConversation.messages || []);
-            onModelChange(decryptedConversation.model || '');
+            setMessages(decrypted.messages || []);
+            if (!currentModel) onModelChange(decrypted.model || "");
           } catch (error) {
-            console.error('Failed to decrypt conversation:', error);
-            // Fallback to unencrypted messages if available
-            setMessages(conversation.messages || []);
-            onModelChange(conversation.model || '');
-            toast.error('Failed to load encrypted conversation - using unencrypted data');
+            console.error("Failed to decrypt conversation:", error);
+
+            // only fall back if there is real plaintext content
+            const hasPlain = Array.isArray(conversation.messages) && conversation.messages.length > 0;
+            if (hasPlain) {
+              setMessages(conversation.messages);
+              if (!currentModel) onModelChange(conversation.model || "");
+              toast.error("Failed to load encrypted conversation - using unencrypted data");
+            } else {
+              // keep whatever is currently shown; don’t overwrite with empty
+              toast.error("Failed to load encrypted conversation");
+            }
           }
         } else {
-          // Use unencrypted conversation data
           setMessages(conversation.messages || []);
-          onModelChange(conversation.model || '');
+          if (!currentModel) onModelChange(conversation.model || "");
         }
       }
     } catch (error) {
-      console.error('Error loading conversation:', error);
-      toast.error('Failed to load conversation');
+      console.error("Error loading conversation:", error);
+      toast.error("Failed to load conversation");
       setMessages([]);
     }
-  }, [currentUser, onModelChange]);
+  }, [currentUser, currentModel, onModelChange]);
 
   // Load conversations when user changes
   useEffect(() => {
@@ -103,8 +108,8 @@ export default function Chat() {
     try {
       const title = messages.length > 0 && messages[0].content
         ? ((messages[0].content as string).length > 50
-            ? (messages[0].content as string).slice(0, 50) + '...'
-            : (messages[0].content as string))
+          ? (messages[0].content as string).slice(0, 50) + '...'
+          : (messages[0].content as string))
         : 'New Conversation';
 
       if (currentConversationId) {
@@ -164,8 +169,18 @@ export default function Chat() {
 
   const handleModelChange = async (newModel: string) => {
     onModelChange(newModel);
-    if (messages.length > 0) {
-      await saveConversation(messages, newModel);
+
+    // persist on the conversation record right away
+    if (currentUser && currentConversationId) {
+      try {
+        await updateConversationMutation.mutateAsync({
+          id: currentConversationId,
+          updates: { model: newModel },
+          password: currentUser.password
+        });
+      } catch (e) {
+        console.error("Failed to persist model change:", e);
+      }
     }
   };
 
