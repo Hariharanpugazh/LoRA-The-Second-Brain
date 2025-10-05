@@ -5,6 +5,7 @@ import Textarea from "react-textarea-autosize";
 import { AiOutlineEnter } from "react-icons/ai";
 import { Upload, Brain, Search, BookOpen, Clock, X } from "lucide-react";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import FilePreviewModal from "./file-preview-modal";
 
 type AIMode = "think-longer" | "deep-research" | "web-search" | "study";
 
@@ -28,6 +29,7 @@ export default function ChatInput({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachments, setAttachments] = useState<Array<{ id: string; name: string; size?: number }>>([]);
+  const [previewFileId, setPreviewFileId] = useState<string | null>(null);
 
   const modes = useMemo(() => [
     { id: "think-longer" as AIMode, label: "Think Longer", icon: Clock, shortcut: "/think" },
@@ -238,12 +240,7 @@ export default function ChatInput({
                 <button
                   key={a.id}
                   type="button"
-                  onClick={() => {
-                    // open preview/download in a new tab
-                    try {
-                      window.open(`/api/files/${a.id}`, "_blank");
-                    } catch {}
-                  }}
+                  onClick={() => setPreviewFileId(a.id)}
                   className="group inline-flex items-center max-w-full rounded-full border border-border/60 bg-muted/40 px-2.5 py-1.5 text-xs hover:bg-muted transition-colors"
                   title={a.name}
                 >
@@ -267,6 +264,8 @@ export default function ChatInput({
               ))}
             </div>
           )}
+
+          <FilePreviewModal fileId={previewFileId} onClose={() => setPreviewFileId(null)} />
 
           {/* Mode selector dropdown */}
           {showModeSelector && (

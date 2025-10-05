@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import path from "node:path";
 import fs from "node:fs/promises";
+import { extractText } from '@/lib/file-processing';
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 
@@ -15,14 +16,18 @@ export async function GET(
 
     const abs = path.join(UPLOAD_DIR, hit);
 
-    // simple text-only support for now
-    if (!/\.(txt|md|csv|log|json)$/i.test(hit)) {
-      return NextResponse.json({ error: "Unsupported type" }, { status: 415 });
-    }
+    // Extract text for many file formats (txt/csv/pdf/docx/etc.)
+    const meta = {
+      id: params.id,
+      name: hit.split(`-${params.id}-`).slice(1).join(`-${params.id}-`) || hit,
+      serverName: hit,
+      mime: '',
+      size: (await fs.stat(abs)).size,
+      path: abs,
+      createdAt: new Date().toISOString(),
+    } as any;
 
-    const buf = await fs.readFile(abs);
-    // cap to 64KB so prompts don’t explode
-    const text = buf.toString("utf8").slice(0, 64 * 1024);
+    const text = (await extractText(meta)).slice(0, 64 * 1024);
     return new NextResponse(text, { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   } catch (e) {
     console.error(e);
