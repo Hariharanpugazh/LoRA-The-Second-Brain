@@ -184,10 +184,17 @@ export default function Chat() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = async ({
+    input,
+    model,
+    fileIds,
+  }: {
+    input: string;
+    model: string;
+    fileIds?: string[];
+  }) => {
     if (input.trim().length === 0) return;
-    if (!currentModel) {
+    if (!model) {
       toast.error("Please select a model first");
       return;
     }
@@ -199,14 +206,15 @@ export default function Chat() {
     setInput("");
 
     try {
-      // Add an empty assistant message to show typing indicator
+      // show typing bubble
       const messagesWithAssistant = [
         ...newMessages,
-        { content: "", role: "assistant" as const }
+        { content: "", role: "assistant" as const },
       ];
       setMessages(messagesWithAssistant);
 
-      const result = await continueConversation(newMessages, currentModel);
+      // pass fileIds to RAG-enabled server action (server will run retrieval internally)
+      const result = await continueConversation(newMessages, model, { fileIds });
 
       setIsStreaming(true);
       let finalAssistantContent = "";
@@ -219,28 +227,27 @@ export default function Chat() {
       setIsStreaming(false);
       setStreamingContent("");
 
-      // Update messages with final content
-      setMessages(prevMessages => {
-        const updatedMessages = [...prevMessages];
-        updatedMessages[updatedMessages.length - 1] = {
+      // finalize assistant message
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
           role: "assistant",
           content: finalAssistantContent,
         };
-        return updatedMessages;
+        return updated;
       });
 
-      // Save conversation with the complete messages
+      // persist
       const finalMessages: CoreMessage[] = [
+        // keep system file context out of the persisted conversation messages
         ...newMessages,
-        { role: "assistant", content: finalAssistantContent }
+        { role: "assistant", content: finalAssistantContent },
       ];
-      await saveConversation(finalMessages, currentModel);
-
+      await saveConversation(finalMessages, model);
     } catch (error) {
-      console.error('Error in conversation:', error);
-      // Remove the empty assistant message on error and restore user message only
-      setMessages(newMessages);
-      toast.error((error as Error).message || 'Failed to get AI response');
+      console.error("Error in conversation:", error);
+      setMessages(newMessages); // drop empty assistant on error
+      toast.error((error as Error).message || "Failed to get AI response");
     }
   };
 

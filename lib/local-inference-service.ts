@@ -117,7 +117,7 @@ async function ensureModelServer(model: string): Promise<Entry> {
   return entry;
 }
 
-process.on("exit", () => { for (const {proc} of RUNNING.values()) try { proc.kill(); } catch {} });
+process.on("exit", () => { for (const {proc} of Array.from(RUNNING.values())) try { proc.kill(); } catch {} });
 process.on("SIGINT", () => process.exit());
 process.on("SIGTERM", () => process.exit());
 

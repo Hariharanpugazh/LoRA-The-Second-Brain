@@ -7,6 +7,7 @@ import { rateLimit } from "@/lib/ratelimit";
 import { headers } from "next/headers";
 import fs from 'fs';
 import path from 'path';
+import { retrieveRelevant } from "@/lib/rag-store";
 
 let localInferenceService: any = null;
 
@@ -80,16 +81,43 @@ async function generateLocalModelResponse(messages: CoreMessage[], model: string
   return stream.value;
 }
 
-export async function continueConversation(messages: CoreMessage[], model: string) {
+type Msg = { role: "system" | "user" | "assistant"; content: string };
+
+export async function continueConversation(
+  messages: CoreMessage[],
+  model: string,
+  opts?: { fileIds?: string[] } // 🔥 ADDED: accept attached file IDs
+) {
   const ip = headers().get("x-forwarded-for") ?? "unknown";
   const isLimited = rateLimit(ip);
   if (isLimited) {
     throw new Error(`Rate Limit Exceeded for ${ip}`);
   }
 
+  // 🔥 ADDED: build retrieval context from uploaded files (or global index)
+  const lastUserMsg = String(messages[messages.length - 1]?.content ?? "");
+  const ctxChunks = await retrieveRelevant(lastUserMsg, opts?.fileIds ?? null, 6);
+  const ctxText = ctxChunks
+    .map((c, i) => `[#${i + 1}] (doc:${c.docId}, chunk:${c.idx})\n${c.text}`)
+    .join("\n\n");
+
+  const withContext: CoreMessage[] = ctxText
+    ? [
+        {
+          role: "system",
+          content:
+            "Use the following context from the user's files if relevant. " +
+            "If the answer is not contained in the context, say so and answer from general knowledge.\n\n" +
+            ctxText,
+        },
+        ...messages,
+      ]
+    : messages;
+
   const isLocal = await isLocalDownloadedModel(model);
   if (isLocal) {
-    return await generateLocalModelResponse(messages, model);
+    // 🔥 CHANGED: pass context-augmented messages
+    return await generateLocalModelResponse(withContext, model);
   }
 
   // Ollama path
@@ -100,7 +128,8 @@ export async function continueConversation(messages: CoreMessage[], model: strin
     );
   }
 
-  const response = await modelService.generateResponse(model, messages, {
+  // 🔥 CHANGED: pass context-augmented messages
+  const response = await modelService.generateResponse(model, withContext, {
     temperature: 0.8,
     topP: 0.7,
     maxTokens: 1024,
