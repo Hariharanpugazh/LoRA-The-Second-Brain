@@ -11,7 +11,7 @@ type AIMode = "think-longer" | "deep-research" | "web-search" | "study";
 type ChatInputProps = {
   input: string;
   setInput: (input: string) => void;
-  handleSubmit: (payload: { input: string; model: string; fileIds?: string[] }) => Promise<void>;
+  handleSubmit: (payload: { input: string; model: string; fileIds?: string[]; files?: { id: string; name: string; size?: number }[] }) => Promise<void>;
   model: string;
   handleModelChange: (model: string) => void;
 };
@@ -121,6 +121,7 @@ export default function ChatInput({
         input,
         model,
         fileIds: attachments.map(a => a.id),
+        files: attachments.map(a => ({ id: a.id, name: a.name, size: a.size })),
       });
       setSelectedMode(null);
       setShowModeSelector(false);

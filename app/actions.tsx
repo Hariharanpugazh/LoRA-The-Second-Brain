@@ -5,9 +5,11 @@ import { CoreMessage } from "ai";
 import { modelService } from "@/lib/model-service";
 import { rateLimit } from "@/lib/ratelimit";
 import { headers } from "next/headers";
-import fs from 'fs';
+import fsSync from 'fs';
 import path from 'path';
+import fs from 'fs/promises';
 import { retrieveRelevant } from "@/lib/rag-store";
+import { extractText } from '@/lib/file-processing';
 
 let localInferenceService: any = null;
 
@@ -16,8 +18,8 @@ const MODELS_DIR = path.join(process.cwd(), 'models');
 // Check if a model is a locally downloaded file (not managed by Ollama)
 async function isLocalDownloadedModel(modelName: string): Promise<boolean> {
   try {
-    if (!fs.existsSync(MODELS_DIR)) return false;
-    const files = fs.readdirSync(MODELS_DIR);
+    if (!fsSync.existsSync(MODELS_DIR)) return false;
+    const files = fsSync.readdirSync(MODELS_DIR);
     const modelFiles = files.filter(
       (f) => f.toLowerCase().endsWith(".gguf") || f.toLowerCase().endsWith(".bin")
     );
@@ -94,21 +96,60 @@ export async function continueConversation(
     throw new Error(`Rate Limit Exceeded for ${ip}`);
   }
 
-  // 🔥 ADDED: build retrieval context from uploaded files (or global index)
+  // 🔥 ADDED: If the client attached files, try to read and extract their text on the server
+  let fileContext = "";
+  if (opts?.fileIds && opts.fileIds.length > 0) {
+    try {
+      const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
+      const entries = await fs.readdir(UPLOAD_DIR);
+      const picked: string[] = [];
+      for (const id of opts.fileIds.slice(0, 3)) {
+        const hit = entries.find((n: string) => n.includes(`-${id}-`));
+        if (!hit) continue;
+        const abs = path.join(UPLOAD_DIR, hit);
+        const meta = {
+          id,
+          name: hit.split(`-${id}-`).slice(1).join(`-${id}-`) || hit,
+          serverName: hit,
+          mime: '',
+          size: (await fs.stat(abs)).size,
+          path: abs,
+          createdAt: new Date().toISOString(),
+        };
+        try {
+          const txt = await extractText(meta as any as import('@/lib/file-processing').UploadedFileMeta);
+          const snippet = txt ? txt.slice(0, 8000) : `(no text extracted)`;
+          picked.push(`### ${meta.name}\n${snippet}`);
+        } catch (e) {
+          picked.push(`### ${meta.name}\n(text unavailable; id=${id})`);
+        }
+      }
+      if (picked.length) {
+        fileContext = `Use the following uploaded files if relevant:\n\n${picked.join('\n\n')}`;
+      }
+    } catch (e) {
+      console.error('Failed to build server-side file context', e);
+    }
+  }
+
+  // build retrieval context from uploaded files (or global index)
   const lastUserMsg = String(messages[messages.length - 1]?.content ?? "");
   const ctxChunks = await retrieveRelevant(lastUserMsg, opts?.fileIds ?? null, 6);
   const ctxText = ctxChunks
     .map((c, i) => `[#${i + 1}] (doc:${c.docId}, chunk:${c.idx})\n${c.text}`)
     .join("\n\n");
 
-  const withContext: CoreMessage[] = ctxText
+  // Combine any server-built fileContext snippets with retrieval text
+  const combinedContextText = [fileContext, ctxText].filter(Boolean).join("\n\n");
+
+  const withContext: CoreMessage[] = combinedContextText
     ? [
         {
           role: "system",
           content:
-            "Use the following context from the user's files if relevant. " +
+            "Use the following context from the user's uploaded files and retrieval index if relevant. " +
             "If the answer is not contained in the context, say so and answer from general knowledge.\n\n" +
-            ctxText,
+            combinedContextText,
         },
         ...messages,
       ]

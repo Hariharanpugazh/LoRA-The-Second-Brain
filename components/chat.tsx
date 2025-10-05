@@ -188,10 +188,12 @@ export default function Chat() {
     input,
     model,
     fileIds,
+    files,
   }: {
     input: string;
     model: string;
     fileIds?: string[];
+    files?: { id: string; name: string; size?: number }[];
   }) => {
     if (input.trim().length === 0) return;
     if (!model) {
@@ -213,8 +215,15 @@ export default function Chat() {
       ];
       setMessages(messagesWithAssistant);
 
+      // If multiple files attached, prepend a system-level instruction listing them
+      const fileListText = files && files.length > 0
+        ? `User attached files:\n${files.map((f, i) => `${i + 1}. ${f.name} (${f.size ?? 'unknown'} bytes)`).join('\n')}\n\nPlease use all attached files together when answering.`
+        : "";
+
+      const messagesToSend = fileListText ? [{ role: 'system' as const, content: fileListText }, ...newMessages] : newMessages;
+
       // pass fileIds to RAG-enabled server action (server will run retrieval internally)
-      const result = await continueConversation(newMessages, model, { fileIds });
+      const result = await continueConversation(messagesToSend, model, { fileIds });
 
       setIsStreaming(true);
       let finalAssistantContent = "";
