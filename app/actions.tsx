@@ -13,6 +13,7 @@ import { extractText } from '@/lib/file-processing';
 import { ProviderType } from "@/lib/model-types";
 import { DatabaseService } from "@/lib/database";
 import { EncryptedConversationStorage } from "@/lib/encrypted-conversation-storage";
+import { generateBarkSpeech, filterThinkingContent } from "@/lib/bark-tts";
 
 let localInferenceService: any = null;
 
@@ -89,7 +90,7 @@ export async function continueConversation(
   opts?: {
     fileIds?: string[];
     conversationHistory?: string;
-    mode?: "think-longer" | "deep-research" | "web-search" | "study";
+    mode?: "think-longer" | "deep-research" | "web-search" | "study" | "sarcastic";
   }
 ) {
   // const ip = headers().get("x-forwarded-for") ?? "unknown";
@@ -199,6 +200,13 @@ export async function continueConversation(
         modeTemperature = 0.7;
         modeMaxTokens = 2048;
         modeInstructions = 'Explain concepts step-by-step. Use examples and analogies. Break down complex ideas. Focus on clarity and understanding.';
+        break;
+
+      case 'sarcastic':
+        modePrompt = 'You are a sarcastic speaking LoRA AI. Respond with witty, ironic commentary in short, punchy answers. Keep responses under 50 words - be clever but concise. Use sarcasm sparingly but effectively.';
+        modeTemperature = 0.7; // Balanced creativity for voice responses
+        modeMaxTokens = 256; // Much shorter for voice responses
+        modeInstructions = 'Keep ALL responses under 50 words. Be sarcastic but brief. Focus on one clever point per response.';
         break;
     }
   }
@@ -422,50 +430,47 @@ export async function handleTranscriptionAction(model: string, provider: Provide
   return await handleTranscription(model, provider, audioData, fileName, mimeType);
 }
 
-// Handle text-to-speech requests
-async function handleTextToSpeech(text: string, voice: string = 'Fritz-PlayAI', responseFormat: string = 'wav') {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    throw new Error('Groq API key not configured');
+// Server action for voice transcription that returns text directly (not a stream)
+export async function transcribeAudioForVoice(model: string, provider: ProviderType, audioData: string, fileName: string, mimeType: string): Promise<string> {
+  if (!audioData) {
+    throw new Error('Audio data is required for transcription');
   }
 
   try {
-    console.log('TTS Request:', { textLength: text.length, voice, responseFormat });
-    
-    const response = await fetch('https://api.groq.com/openai/v1/audio/speech', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'playai-tts',
-        input: text,
-        voice: voice,
-        response_format: responseFormat,
-      }),
+    const transcriptionText = await modelService.generateResponse(provider, model, [], {
+      audioBase64: audioData,
+      fileName,
+      mimeType,
+      response_format: 'text'
     });
 
-    console.log('TTS API Response status:', response.status);
+    // Return the transcription text directly
+    return transcriptionText;
+  } catch (error) {
+    console.error('Transcription error:', error);
+    throw error;
+  }
+}
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('TTS API Error:', errorText);
-      throw new Error(`Groq TTS API error: ${response.status} ${response.statusText} - ${errorText}`);
+// Handle text-to-speech requests
+async function handleTextToSpeech(text: string, voice: string = 'af_bella', responseFormat: string = 'wav', userId?: string) {
+  try {
+    console.log('TTS Request:', { textLength: text.length, voice, responseFormat });
+
+    // Filter thinking content from the text
+    const filteredText = filterThinkingContent(text);
+    console.log('Filtered text length:', filteredText.length);
+
+    if (!filteredText.trim()) {
+      throw new Error('No speech content after filtering thinking patterns');
     }
 
-    // Convert audio data to base64 for serialization
-    const audioBuffer = await response.arrayBuffer();
-    console.log('TTS Audio buffer size:', audioBuffer.byteLength);
-    
-    const base64Audio = Buffer.from(audioBuffer).toString('base64');
-    console.log('TTS Base64 length:', base64Audio.length);
+    // Use Bark TTS for open-source emotional speech
+    const result = await generateBarkSpeech(filteredText, voice);
 
-    return {
-      audioData: base64Audio,
-      contentType: response.headers.get('content-type') || 'audio/wav',
-      fileName: `tts-${Date.now()}.${responseFormat}`,
-    };
+    console.log('Bark TTS generated successfully');
+
+    return result;
   } catch (error) {
     console.error('Error generating TTS:', error);
     throw error;
@@ -473,6 +478,36 @@ async function handleTextToSpeech(text: string, voice: string = 'Fritz-PlayAI', 
 }
 
 // Export handleTextToSpeech as a server action
-export async function handleTextToSpeechAction(text: string, voice?: string, responseFormat?: string) {
-  return await handleTextToSpeech(text, voice, responseFormat);
+export async function handleTextToSpeechAction(text: string, voice?: string, responseFormat?: string, userId?: string) {
+  return await handleTextToSpeech(text, voice, responseFormat, userId);
+}
+
+// Handle ElevenLabs text-to-speech requests
+async function handleElevenLabsTextToSpeech(text: string, voiceId: string = 'af_bella', userId?: string) {
+  try {
+    console.log('ElevenLabs TTS Request:', { textLength: text.length, voiceId });
+
+    // Filter thinking content from the text
+    const filteredText = filterThinkingContent(text);
+    console.log('Filtered text length:', filteredText.length);
+
+    if (!filteredText.trim()) {
+      throw new Error('No speech content after filtering thinking patterns');
+    }
+
+    // Use Bark TTS for open-source emotional speech
+    const result = await generateBarkSpeech(filteredText, voiceId);
+
+    console.log('Bark TTS generated successfully');
+
+    return result;
+  } catch (error) {
+    console.error('Error generating ElevenLabs TTS:', error);
+    throw error;
+  }
+}
+
+// Export handleElevenLabsTextToSpeech as a server action
+export async function handleElevenLabsTextToSpeechAction(text: string, voiceId?: string, userId?: string) {
+  return await handleElevenLabsTextToSpeech(text, voiceId, userId);
 }
