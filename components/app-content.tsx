@@ -19,6 +19,7 @@ import { useOllamaStatus } from "@/lib/model-hooks";
 import { SystemCheck } from "@/components/system-check";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjects } from "@/lib/database-hooks";
+import { SettingsModal } from "@/components/settings-modal";
 
 import { ProviderType } from "@/lib/model-types";
 
@@ -102,10 +103,10 @@ function AppContentInner({ children }: AppContentProps) {
   const [currentFileId, setCurrentFileId] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-
-  // DeepSecure media type
   const [deepMediaType, setDeepMediaType] = useState<'image' | 'video' | 'audio'>('image');
 
+  // Settings modal state
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   // Initialize sidebar state from cookie
   const [sidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -236,14 +237,15 @@ function AppContentInner({ children }: AppContentProps) {
 
   const isProfilePage = pathname === '/profile';
   const isDeepSecurePage = pathname?.startsWith('/DeepSecureAI');
+  const isWhatsNewPage = pathname === '/whats-new';
 
   return (
     <ModelContext.Provider value={{ currentModel, currentProvider, onModelChange: handleModelChange, onOpenFilesDialog: handleSeeAllFiles }}>
       <DeepSecureContext.Provider value={{ mediaType: deepMediaType, setMediaType: setDeepMediaType }}>
         <FilePreviewContext.Provider value={{ currentFileId, setCurrentFileId }}>
         <SidebarProvider defaultOpen={sidebarOpen}>
-          {/* Hide the sidebar for DeepSecureAI page specifically */}
-          {!isProfilePage && !isDeepSecurePage && (
+          {/* Hide the sidebar for DeepSecureAI page and WhatsNew page specifically */}
+          {!isProfilePage && !isDeepSecurePage && !isWhatsNewPage && (
             <AppSidebar
               onNewChat={handleNewChat}
               onSelectConversation={handleSelectConversation}
@@ -259,10 +261,11 @@ function AppContentInner({ children }: AppContentProps) {
               onCreateProject={handleCreateProject}
               onSelectProject={handleSelectProject}
               onAddToProject={handleAddToProject}
+              onOpenSettings={() => setSettingsModalOpen(true)}
             />
           )}
           <SidebarInset>
-            {!isProfilePage && <Nav showSidebar={!isDeepSecurePage} showMediaSelector={isDeepSecurePage} />}
+            {!isProfilePage && !isWhatsNewPage && <Nav showSidebar={!isDeepSecurePage} showMediaSelector={isDeepSecurePage} hideLeftButtons={settingsModalOpen} />}
             <Toaster position={"top-center"} richColors />
             <SystemCheck />
             {children}
@@ -296,6 +299,10 @@ function AppContentInner({ children }: AppContentProps) {
           projectId={selectedProjectForChats?.id || null}
           projectName={selectedProjectForChats?.name || ''}
           onSelectConversation={handleSelectConversation}
+        />
+        <SettingsModal
+          isOpen={settingsModalOpen}
+          onClose={() => setSettingsModalOpen(false)}
         />
       </FilePreviewContext.Provider>
       </DeepSecureContext.Provider>
