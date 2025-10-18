@@ -19,7 +19,6 @@ import { useOllamaStatus } from "@/lib/model-hooks";
 import { SystemCheck } from "@/components/system-check";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProjects } from "@/lib/database-hooks";
-import { SettingsModal } from "@/components/settings-modal";
 
 import { ProviderType } from "@/lib/model-types";
 
@@ -39,8 +38,8 @@ export const useModel = () => useContext(ModelContext);
 
 // DeepSecure context to share selected media type with Nav and the DeepSecureAI page
 export const DeepSecureContext = createContext<{
-  mediaType: 'image' | 'video' | 'audio' | 'ai-generated-image';
-  setMediaType: (t: 'image' | 'video' | 'audio' | 'ai-generated-image') => void;
+  mediaType: 'image' | 'video' | 'audio';
+  setMediaType: (t: 'image' | 'video' | 'audio') => void;
 } | null>(null);
 
 export const useDeepSecure = () => {
@@ -103,10 +102,10 @@ function AppContentInner({ children }: AppContentProps) {
   const [currentFileId, setCurrentFileId] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [deepMediaType, setDeepMediaType] = useState<'image' | 'video' | 'audio' | 'ai-generated-image'>('image');
 
-  // Settings modal state
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  // DeepSecure media type
+  const [deepMediaType, setDeepMediaType] = useState<'image' | 'video' | 'audio'>('image');
+
   // Initialize sidebar state from cookie
   const [sidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -237,15 +236,15 @@ function AppContentInner({ children }: AppContentProps) {
 
   const isProfilePage = pathname === '/profile';
   const isDeepSecurePage = pathname?.startsWith('/DeepSecureAI');
-  const isWhatsNewPage = pathname === '/whats-new';
+  const isAboutPage = pathname === '/about';
 
   return (
     <ModelContext.Provider value={{ currentModel, currentProvider, onModelChange: handleModelChange, onOpenFilesDialog: handleSeeAllFiles }}>
       <DeepSecureContext.Provider value={{ mediaType: deepMediaType, setMediaType: setDeepMediaType }}>
         <FilePreviewContext.Provider value={{ currentFileId, setCurrentFileId }}>
         <SidebarProvider defaultOpen={sidebarOpen}>
-          {/* Hide the sidebar for DeepSecureAI page and WhatsNew page specifically */}
-          {!isProfilePage && !isDeepSecurePage && !isWhatsNewPage && (
+          {/* Hide the sidebar for DeepSecureAI and About pages */}
+          {!isProfilePage && !isDeepSecurePage && !isAboutPage && (
             <AppSidebar
               onNewChat={handleNewChat}
               onSelectConversation={handleSelectConversation}
@@ -261,11 +260,10 @@ function AppContentInner({ children }: AppContentProps) {
               onCreateProject={handleCreateProject}
               onSelectProject={handleSelectProject}
               onAddToProject={handleAddToProject}
-              onOpenSettings={() => setSettingsModalOpen(true)}
             />
           )}
           <SidebarInset>
-            {!isProfilePage && !isWhatsNewPage && <Nav showSidebar={!isDeepSecurePage} showMediaSelector={isDeepSecurePage} hideLeftButtons={settingsModalOpen} />}
+            {!isProfilePage && !isAboutPage && <Nav showSidebar={!isDeepSecurePage} showMediaSelector={isDeepSecurePage} />}
             <Toaster position={"top-center"} richColors />
             <SystemCheck />
             {children}
@@ -299,10 +297,6 @@ function AppContentInner({ children }: AppContentProps) {
           projectId={selectedProjectForChats?.id || null}
           projectName={selectedProjectForChats?.name || ''}
           onSelectConversation={handleSelectConversation}
-        />
-        <SettingsModal
-          isOpen={settingsModalOpen}
-          onClose={() => setSettingsModalOpen(false)}
         />
       </FilePreviewContext.Provider>
       </DeepSecureContext.Provider>

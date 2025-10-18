@@ -791,23 +791,9 @@ class ModelService {
         throw new Error(`Groq transcription API error: ${response.statusText} - ${errorText}`);
       }
 
-      // Handle different response formats
-      if (options.response_format === 'verbose_json') {
-        try {
-          // Parse JSON response for verbose format
-          const jsonResponse = await response.json();
-          return jsonResponse; // Return the full JSON object
-        } catch (parseError) {
-          console.warn('Failed to parse verbose_json response, falling back to text:', parseError);
-          // Fallback: treat as text response
-          const transcriptionText = await response.text();
-          return transcriptionText;
-        }
-      } else {
-        // Extract the text content from the response for text format
-        const transcriptionText = await response.text();
-        return transcriptionText;
-      }
+      // Extract the text content from the response
+      const transcriptionText = await response.text();
+      return transcriptionText;
     } catch (error) {
       console.error('Error generating Groq transcription:', error);
       throw error;
@@ -833,7 +819,7 @@ class ModelService {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-            'X-Title': 'Venom The Second Brain',
+            'X-Title': 'LoRA The Second Brain',
           },
           body: JSON.stringify({
             model,
@@ -946,7 +932,7 @@ class ModelService {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-            'X-Title': 'Venom The Second Brain',
+            'X-Title': 'LoRA The Second Brain',
           },
           body: JSON.stringify({
             model,

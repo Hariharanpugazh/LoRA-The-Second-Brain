@@ -28,8 +28,7 @@ import {
   LogOut,
   Globe,
   Trash2,
-  AlertTriangle,
-  Mic
+  AlertTriangle
 } from "lucide-react";
 import { useExportConversationsForKnowledgeBase } from "@/lib/database-hooks";
 import { memoryPresets, LoRAConfig, defaultConfig } from "@/lib/config";
@@ -37,13 +36,12 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
-type SettingsSection = 'preferences' | 'environment' | 'knowledge' | 'tts' | 'about';
+type SettingsSection = 'preferences' | 'environment' | 'knowledge' | 'about';
 
 const sections = [
   { id: 'preferences' as const, label: 'Preferences', icon: Sliders },
   { id: 'environment' as const, label: 'Environment', icon: Globe },
   { id: 'knowledge' as const, label: 'Knowledge', icon: BookOpen },
-  { id: 'tts' as const, label: 'Text-to-Speech', icon: Mic },
   { id: 'about' as const, label: 'About', icon: Info },
 ];
 
@@ -404,7 +402,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <div className="bg-muted p-4 rounded-lg text-sm space-y-2">
                       <div className="font-medium">1. Install Ollama:</div>
                       <div className="font-mono text-xs bg-background p-2 rounded">
-                        # Download from: https://ollama.com/download
+                        # Download from: https://ollama.ai/download
                       </div>
 
                       <div className="font-medium">2. Start Ollama service:</div>
@@ -496,189 +494,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </div>
         );
 
-      case 'tts':
-        return (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Mic className="w-5 h-5" />
-                  Text-to-Speech Settings
-                </CardTitle>
-                <CardDescription>
-                  Configure ElevenLabs voice settings for natural speech synthesis
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="elevenlabs-api-key" className="text-base">ElevenLabs API Key</Label>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Your ElevenLabs API key for text-to-speech. Get one from <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer" className="underline">elevenlabs.io</a>
-                    </p>
-                    <input
-                      id="elevenlabs-api-key"
-                      type="password"
-                      placeholder="sk_..."
-                      defaultValue={typeof window !== 'undefined' ? localStorage.getItem('elevenlabs_api_key') || process.env.ELEVENLABS_API_KEY || '' : process.env.ELEVENLABS_API_KEY || ''}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                      onChange={(e) => {
-                        // Store in localStorage for client-side use
-                        if (e.target.value.trim()) {
-                          localStorage.setItem('elevenlabs_api_key', e.target.value.trim());
-                        } else {
-                          localStorage.removeItem('elevenlabs_api_key');
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="elevenlabs-voice-id" className="text-base">Voice ID</Label>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      The ElevenLabs voice ID to use for speech synthesis. Default: JkpEM0J2p7DL32VXnieS
-                    </p>
-                    <input
-                      id="elevenlabs-voice-id"
-                      type="text"
-                      placeholder="JkpEM0J2p7DL32VXnieS"
-                      defaultValue={typeof window !== 'undefined' ? localStorage.getItem('elevenlabs_voice_id') || process.env.ELEVENLABS_VOICE_ID || 'JkpEM0J2p7DL32VXnieS' : process.env.ELEVENLABS_VOICE_ID || 'JkpEM0J2p7DL32VXnieS'}
-                      className="w-full px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                      onChange={(e) => {
-                        // Store in localStorage for client-side use
-                        if (e.target.value.trim()) {
-                          localStorage.setItem('elevenlabs_voice_id', e.target.value.trim());
-                        } else {
-                          localStorage.removeItem('elevenlabs_voice_id');
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Voice Settings</h4>
-                    <p className="text-sm text-muted-foreground">
-                      These settings control the voice characteristics. Changes take effect immediately.
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-sm">Stability</Label>
-                        <p className="text-xs text-muted-foreground mb-1">How stable the voice is (0.0 - 1.0)</p>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          defaultValue="0.5"
-                          className="w-full"
-                          onChange={(e) => {
-                            localStorage.setItem('elevenlabs_stability', e.target.value);
-                          }}
-                        />
-                        <div className="text-xs text-center mt-1">
-                          {typeof window !== 'undefined' ? localStorage.getItem('elevenlabs_stability') || '0.5' : '0.5'}
-                        </div>
-                      </div>
-
-                      <div>
-                        <Label className="text-sm">Similarity Boost</Label>
-                        <p className="text-xs text-muted-foreground mb-1">How similar to the original voice (0.0 - 1.0)</p>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          defaultValue="0.75"
-                          className="w-full"
-                          onChange={(e) => {
-                            localStorage.setItem('elevenlabs_similarity_boost', e.target.value);
-                          }}
-                        />
-                        <div className="text-xs text-center mt-1">
-                          {typeof window !== 'undefined' ? localStorage.getItem('elevenlabs_similarity_boost') || '0.75' : '0.75'}
-                        </div>
-                      </div>
-
-                      <div>
-                        <Label className="text-sm">Style</Label>
-                        <p className="text-xs text-muted-foreground mb-1">How expressive the voice is (0.0 - 1.0)</p>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          defaultValue="0.0"
-                          className="w-full"
-                          onChange={(e) => {
-                            localStorage.setItem('elevenlabs_style', e.target.value);
-                          }}
-                        />
-                        <div className="text-xs text-center mt-1">
-                          {typeof window !== 'undefined' ? localStorage.getItem('elevenlabs_style') || '0.0' : '0.0'}
-                        </div>
-                      </div>
-
-                      <div>
-                        <Label className="text-sm">Speed</Label>
-                        <p className="text-xs text-muted-foreground mb-1">Speech speed multiplier (0.5 - 2.0)</p>
-                        <input
-                          type="range"
-                          min="0.5"
-                          max="2.0"
-                          step="0.1"
-                          defaultValue="1.0"
-                          className="w-full"
-                          onChange={(e) => {
-                            localStorage.setItem('elevenlabs_speed', e.target.value);
-                          }}
-                        />
-                        <div className="text-xs text-center mt-1">
-                          {typeof window !== 'undefined' ? localStorage.getItem('elevenlabs_speed') || '1.0' : '1.0'}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="elevenlabs-speaker-boost"
-                        defaultChecked={true}
-                        className="rounded"
-                        onChange={(e) => {
-                          localStorage.setItem('elevenlabs_use_speaker_boost', e.target.checked.toString());
-                        }}
-                      />
-                      <Label htmlFor="elevenlabs-speaker-boost" className="text-sm">
-                        Use Speaker Boost
-                      </Label>
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">Emotion Tags</h4>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Add emotion tags to your text for different voice styles. Example: [excited] Hello world!
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div><code className="bg-muted px-2 py-1 rounded">[whispering]</code> - Whispering voice</div>
-                      <div><code className="bg-muted px-2 py-1 rounded">[angry]</code> - Angry voice</div>
-                      <div><code className="bg-muted px-2 py-1 rounded">[shouting]</code> - Shouting voice</div>
-                      <div><code className="bg-muted px-2 py-1 rounded">[sad]</code> - Sad voice</div>
-                      <div><code className="bg-muted px-2 py-1 rounded">[laughing]</code> - Laughing voice</div>
-                      <div><code className="bg-muted px-2 py-1 rounded">[excited]</code> - Excited voice</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        );
-
       case 'about':
         return (
           <div className="space-y-6">
@@ -751,21 +566,16 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999]">
-      {/* Blur Layer */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Blurred Background */}
       <div
-        className="absolute inset-0 backdrop-blur-sm pointer-events-none"
+        className="absolute inset-0 bg-background/80 backdrop-blur-sm"
         onClick={onClose}
-        style={{ 
-          backdropFilter: 'blur(3px)',
-          WebkitBackdropFilter: 'blur(3px)'
-        }}
       />
 
-      {/* Settings Modal (above everything) */}
-      <div className="relative z-20 flex items-center justify-center h-full" onClick={onClose}>
-        <div className="w-full max-w-6xl h-[90vh] bg-background border rounded-lg shadow-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
-          <div className="flex h-full">
+      {/* Settings Modal */}
+      <div className="relative w-full max-w-6xl h-[90vh] bg-background border rounded-lg shadow-lg overflow-hidden">
+        <div className="flex h-full">
           {/* Sidebar */}
           <div className="w-64 border-r bg-muted/30">
             <div className="p-6 border-b">
@@ -807,7 +617,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   {activeSection === 'preferences' && 'Customize your LoRA experience'}
                   {activeSection === 'environment' && 'Configure external services and connections'}
                   {activeSection === 'knowledge' && 'Manage your knowledge base'}
-                  {activeSection === 'tts' && 'Configure text-to-speech settings'}
                   {activeSection === 'about' && 'Learn more about LoRA'}
                 </p>
               </div>
@@ -832,7 +641,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               {renderSectionContent()}
             </ScrollArea>
           </div>
-        </div>
         </div>
       </div>
 
