@@ -15,7 +15,7 @@ export function TeamSwitcher({
 }: {
   teams: {
     name: string;
-    logo: React.ElementType;
+    logo?: React.ElementType;
     plan: string;
   }[];
 }) {
@@ -24,8 +24,8 @@ export function TeamSwitcher({
   const [activeTeam, setActiveTeam] = React.useState(teams[0]);
 
   const handleClick = () => {
-    // Don't navigate, just show it's clickable
-    console.log('Team switcher clicked');
+    // Navigate to About page for LoRA project
+    router.push('/about');
   };
 
   return (
@@ -36,10 +36,10 @@ export function TeamSwitcher({
           onClick={handleClick}
           className="cursor-pointer"
         >
-          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <activeTeam.logo className="size-4" />
+          <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
+            {activeTeam.logo && <activeTeam.logo className="size-4" />}
           </div>
-          <div className="grid flex-1 text-left text-sm leading-tight">
+          <div className="grid flex-1 text-left text-sm leading-tight pl-0 ml-[-8px]">
             <span className="truncate font-semibold flex items-center min-h-[32px]">
               {activeTeam.name}
             </span>

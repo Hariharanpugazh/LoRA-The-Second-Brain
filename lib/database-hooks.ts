@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DatabaseService, User, Conversation, FileItem, Project } from "@/lib/database";
+import { ProviderType } from "@/lib/model-types";
 
 // Query keys
 export const queryKeys = {
@@ -15,7 +16,13 @@ export const queryKeys = {
 export function useUsers() {
   return useQuery({
     queryKey: queryKeys.users,
-    queryFn: DatabaseService.getAllUsers,
+    queryFn: () => {
+      if (typeof window === 'undefined' || !window.indexedDB) {
+        return Promise.resolve([]);
+      }
+      return DatabaseService.getAllUsers();
+    },
+    enabled: typeof window !== 'undefined' && !!window.indexedDB,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
@@ -23,8 +30,13 @@ export function useUsers() {
 export function useUser(userId: string) {
   return useQuery({
     queryKey: queryKeys.user(userId),
-    queryFn: () => DatabaseService.getUserById(userId),
-    enabled: !!userId,
+    queryFn: () => {
+      if (typeof window === 'undefined' || !window.indexedDB) {
+        return Promise.resolve(null);
+      }
+      return DatabaseService.getUserById(userId);
+    },
+    enabled: !!userId && typeof window !== 'undefined' && !!window.indexedDB,
   });
 }
 
@@ -32,23 +44,10 @@ export function useCreateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ name, password }: { name: string; password: string }) =>
-      DatabaseService.createUser(name, password),
+    mutationFn: ({ name, email, password, securityQuestion, securityAnswer }: { name: string; email: string; password: string; securityQuestion: string; securityAnswer: string }) =>
+      DatabaseService.createUser(name, email, password, securityQuestion, securityAnswer),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users });
-    },
-  });
-}
-
-export function useUpdateUser() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<User> }) =>
-      DatabaseService.updateUser(id, updates),
-    onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.users });
-      queryClient.invalidateQueries({ queryKey: queryKeys.user(id) });
     },
   });
 }
@@ -57,7 +56,7 @@ export function useDeleteUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => DatabaseService.deleteUser(id),
+    mutationFn: ({ id, password }: { id: string; password: string }) => DatabaseService.deleteUserByPassword(id, password),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users });
     },
@@ -68,8 +67,13 @@ export function useDeleteUser() {
 export function useConversations(userId: string) {
   return useQuery({
     queryKey: queryKeys.conversations(userId),
-    queryFn: () => DatabaseService.getConversationsByUserId(userId),
-    enabled: !!userId,
+    queryFn: () => {
+      if (typeof window === 'undefined' || !window.indexedDB) {
+        return Promise.resolve([]);
+      }
+      return DatabaseService.getConversationsByUserId(userId);
+    },
+    enabled: !!userId && typeof window !== 'undefined' && !!window.indexedDB,
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
 }
@@ -77,8 +81,13 @@ export function useConversations(userId: string) {
 export function useConversation(conversationId: string) {
   return useQuery({
     queryKey: queryKeys.conversation(conversationId),
-    queryFn: () => DatabaseService.getConversationById(conversationId),
-    enabled: !!conversationId,
+    queryFn: () => {
+      if (typeof window === 'undefined' || !window.indexedDB) {
+        return Promise.resolve(null);
+      }
+      return DatabaseService.getConversationById(conversationId);
+    },
+    enabled: !!conversationId && typeof window !== 'undefined' && !!window.indexedDB,
   });
 }
 
@@ -91,6 +100,7 @@ export function useCreateConversation() {
       title,
       messages,
       model,
+      provider,
       pinned = false,
       password
     }: {
@@ -98,9 +108,10 @@ export function useCreateConversation() {
       title: string;
       messages: any[];
       model: string;
+      provider?: ProviderType;
       pinned?: boolean;
       password?: string;
-    }) => DatabaseService.createConversation(userId, title, messages, model, pinned, password),
+    }) => DatabaseService.createConversation(userId, title, messages, model, pinned, password, provider),
     onSuccess: (newConversation, { userId }) => {
       // Invalidate and refetch conversations for this user
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations(userId) });
@@ -146,8 +157,13 @@ export function useDeleteConversation() {
 export function useFiles(userId: string) {
   return useQuery({
     queryKey: queryKeys.files(userId),
-    queryFn: () => DatabaseService.getFilesByUserId(userId),
-    enabled: !!userId,
+    queryFn: () => {
+      if (typeof window === 'undefined' || !window.indexedDB) {
+        return Promise.resolve([]);
+      }
+      return DatabaseService.getFilesByUserId(userId);
+    },
+    enabled: !!userId && typeof window !== 'undefined' && !!window.indexedDB,
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
 }
@@ -227,8 +243,13 @@ export function useDeleteFile() {
 export function useProjects(userId: string) {
   return useQuery({
     queryKey: queryKeys.projects(userId),
-    queryFn: () => DatabaseService.getProjectsByUserId(userId),
-    enabled: !!userId,
+    queryFn: () => {
+      if (typeof window === 'undefined' || !window.indexedDB) {
+        return Promise.resolve([]);
+      }
+      return DatabaseService.getProjectsByUserId(userId);
+    },
+    enabled: !!userId && typeof window !== 'undefined' && !!window.indexedDB,
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
 }

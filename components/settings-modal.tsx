@@ -26,16 +26,19 @@ import {
   Info,
   X,
   LogOut,
-  Globe
+  Globe,
+  Trash2,
+  AlertTriangle
 } from "lucide-react";
 import { useExportConversationsForKnowledgeBase } from "@/lib/database-hooks";
 import { memoryPresets, LoRAConfig, defaultConfig } from "@/lib/config";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
-type SettingsSection = 'account' | 'preferences' | 'environment' | 'knowledge' | 'about';
+type SettingsSection = 'preferences' | 'environment' | 'knowledge' | 'about';
 
 const sections = [
-  { id: 'account' as const, label: 'My Account', icon: User },
   { id: 'preferences' as const, label: 'Preferences', icon: Sliders },
   { id: 'environment' as const, label: 'Environment', icon: Globe },
   { id: 'knowledge' as const, label: 'Knowledge', icon: BookOpen },
@@ -52,7 +55,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSection>('preferences');
   const exportConversationsMutation = useExportConversationsForKnowledgeBase();
-  const { currentUser, users, logout } = useUser();
+  const { currentUser, users, logout, deleteCurrentUser } = useUser();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Load saved config on mount
   useEffect(() => {
@@ -113,198 +119,28 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     return { label: "Ultra Low Power", color: "bg-gray-500" };
   };
 
-  const performance = getPerformanceRating(config);
+  const handleDeleteAccount = async () => {
+    if (!deletePassword.trim()) return;
+
+    setIsDeleting(true);
+    try {
+      const success = await deleteCurrentUser(deletePassword.trim());
+      if (success) {
+        toast.success("Account deleted successfully");
+        setShowDeleteDialog(false);
+        onClose();
+        // The logout is handled by deleteCurrentUser
+      } else {
+        toast.error("Invalid password. Account deletion failed.");
+      }
+    } catch (error) {
+      toast.error("Failed to delete account. Please try again.");
+    }
+    setIsDeleting(false);
+  };
 
   const renderSectionContent = () => {
     switch (activeSection) {
-      case 'account':
-        return (
-          <div className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-3">
-              {/* Profile Card */}
-              <Card className="md:col-span-1">
-                <CardHeader className="text-center">
-                  <div className="mx-auto mb-4">
-                    <Avatar className="w-20 h-20 mx-auto">
-                      <AvatarImage src="/avatars/user.jpg" alt={currentUser?.name || 'User'} />
-                      <AvatarFallback className="text-xl bg-primary/10 text-primary font-semibold">
-                        {currentUser?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
-                  </div>
-                  <CardTitle className="text-lg">{currentUser?.name || 'User'}</CardTitle>
-                  <CardDescription>LoRA User</CardDescription>
-                  <div className="flex justify-center gap-2 mt-2">
-                    <Badge variant="secondary">Free Plan</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="text-sm text-muted-foreground">
-                    <p>Total Users: {users?.length || 0}</p>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      logout?.();
-                      onClose();
-                    }}
-                    variant="outline"
-                    className="w-full"
-                    size="sm"
-                  >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Sign Out
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Profile Details */}
-              <div className="md:col-span-2 space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <User className="w-5 h-5" />
-                      Profile Information
-                    </CardTitle>
-                    <CardDescription>
-                      Your account details and preferences
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Full Name
-                        </label>
-                        <p className="text-sm font-medium">{currentUser?.name || 'User'}</p>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Email
-                        </label>
-                        <p className="text-sm font-medium">user@lora.ai</p>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Account Type
-                        </label>
-                        <p className="text-sm font-medium">Personal</p>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Member Since
-                        </label>
-                        <p className="text-sm font-medium">
-                          {currentUser?.createdAt ? new Date(currentUser.createdAt).toLocaleDateString() : 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {(users?.length || 0) > 1 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <User className="w-5 h-5" />
-                        All Users ({users?.length || 0})
-                      </CardTitle>
-                      <CardDescription>
-                        Switch between your accounts
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {users?.map((user) => (
-                          <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
-                            <div className="flex items-center gap-3">
-                              <Avatar className="w-8 h-8">
-                                <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                                  {user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="text-sm font-medium">{user.name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  Created {new Date(user.createdAt).toLocaleDateString()}
-                                </p>
-                              </div>
-                            </div>
-                            {user.id === currentUser?.id && (
-                              <Badge variant="secondary" className="text-xs">Current</Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Settings className="w-5 h-5" />
-                      Account Settings
-                    </CardTitle>
-                    <CardDescription>
-                      Manage your account preferences
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">Email Notifications</p>
-                        <p className="text-xs text-muted-foreground">
-                          Receive updates about your account
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        Configure
-                      </Button>
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">Data Privacy</p>
-                        <p className="text-xs text-muted-foreground">
-                          Manage your data and privacy settings
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        Manage
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Usage Statistics</CardTitle>
-                    <CardDescription>
-                      Your LoRA usage overview
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-primary">0</p>
-                        <p className="text-xs text-muted-foreground">AI Conversations</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-primary">0</p>
-                        <p className="text-xs text-muted-foreground">Documents Processed</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-primary">0</p>
-                        <p className="text-xs text-muted-foreground">Models Used</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </div>
-        );
-
       case 'preferences':
         return (
           <div className="space-y-6">
@@ -316,7 +152,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   Quick Presets
                 </CardTitle>
                 <CardDescription>
-                  Choose a preset optimized for your system's capabilities
+                  Choose a preset optimized for your system&apos;s capabilities
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -585,7 +421,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       <div className="text-sm">
                         <div className="font-medium text-blue-900 dark:text-blue-100">Custom Host Configuration</div>
                         <div className="text-blue-700 dark:text-blue-300 mt-1">
-                          If you're running Ollama on a different machine or port, update the host URL above.
+                          If you&apos;re running Ollama on a different machine or port, update the host URL above.
                           The format should be: http://hostname:port
                         </div>
                       </div>
@@ -712,7 +548,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       </div>
                       <div>
                         <div className="font-medium">Performance</div>
-                        <div className="text-muted-foreground">{performance.label}</div>
+                        <div className="text-muted-foreground">{config.quantization}</div>
                       </div>
                     </div>
                   </div>
@@ -778,7 +614,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   {sections.find(s => s.id === activeSection)?.label}
                 </h1>
                 <p className="text-muted-foreground mt-1">
-                  {activeSection === 'account' && 'Manage your account and subscription'}
                   {activeSection === 'preferences' && 'Customize your LoRA experience'}
                   {activeSection === 'environment' && 'Configure external services and connections'}
                   {activeSection === 'knowledge' && 'Manage your knowledge base'}
@@ -808,6 +643,63 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </div>
         </div>
       </div>
+
+      {/* Delete Account Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              Delete Account
+            </DialogTitle>
+            <DialogDescription className="space-y-2">
+              <p>This action cannot be undone. This will permanently delete:</p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>All your conversations and messages</li>
+                <li>All uploaded files and documents</li>
+                <li>All projects and project data</li>
+                <li>Your account and all associated data</li>
+              </ul>
+              <p className="font-medium text-destructive">
+                You will be immediately logged out and cannot recover this data.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="delete-password" className="text-sm font-medium">
+                Confirm your password to delete your account
+              </Label>
+              <Input
+                id="delete-password"
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Enter your password"
+                className="w-full"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteDialog(false);
+                  setDeletePassword("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteAccount}
+                disabled={!deletePassword.trim() || isDeleting}
+              >
+                {isDeleting ? "Deleting..." : "Delete Account"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
